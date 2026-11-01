@@ -54,11 +54,11 @@ If `curl` is blocked on your machine, verify the whole R2 path (public access +
 CORS + decompression) by pointing dev at the CDN and loading the app:
 
 ```bash
-VITE_GRAPH_DB_URL=https://pub-<hash>.r2.dev/graph.db.gz npm run dev
+VITE_GRAPH_DB_URL=https://cdn.banded.fm/graph.db.gz npm run dev
 ```
 
 Then open http://localhost:5173 and check DevTools → Network: a `200` for
-`graph.db.gz` from the r2.dev domain plus a working Explore graph confirms it.
+`graph.db.gz` from cdn.banded.fm plus a working Explore graph confirms it.
 (To force the CDN path specifically, temporarily rename/remove your local
 `public/graph.db.gz` so the same-origin fetch misses and the fallback kicks in.)
 
@@ -71,8 +71,14 @@ cross-origin browser `fetch` works reliably.
 1. **Create a bucket** (Cloudflare dashboard → R2 → Create bucket), e.g.
    `musicscenemap-graph`.
 2. **Upload** `public/graph.db.gz` to the bucket.
-3. **Enable public access**: either the bucket's `r2.dev` dev URL, or connect a
-   custom domain (recommended for production).
+3. **Enable public access** through a custom domain: bucket → Settings →
+   Custom Domains → Add (the domain must be a zone in the same Cloudflare
+   account). Production uses `cdn.banded.fm`. Don't use the bucket's `r2.dev`
+   URL beyond a quick test: it's rate-limited, uncached and meant for
+   development only; it's disabled on our bucket.
+   - Cache it: a Cache Rule for `cdn.banded.fm/*` with "Eligible for cache"
+     (by default Cloudflare only caches some file types). After uploading a
+     new `graph.db.gz`, purge `https://cdn.banded.fm/graph.db.gz` from the cache.
 4. **Set a CORS policy** on the bucket so the browser can fetch it. Restrict the
    origin to your Pages domain(s):
 
@@ -80,8 +86,8 @@ cross-origin browser `fetch` works reliably.
    [
      {
        "AllowedOrigins": [
-         "https://<your-project>.pages.dev",
-         "https://<your-custom-domain>"
+         "https://banded.fm",
+         "https://www.banded.fm"
        ],
        "AllowedMethods": ["GET", "HEAD"],
        "AllowedHeaders": ["*"],
@@ -90,9 +96,9 @@ cross-origin browser `fetch` works reliably.
    ]
    ```
 
-5. **Point the app at it**: set `VITE_GRAPH_DB_URL` to the object URL, e.g.
-   `https://<bucket>.<account>.r2.dev/graph.db.gz` or
-   `https://cdn.yourdomain.com/graph.db.gz`.
+5. **Point the app at it**: Cloudflare builds default to
+   `https://cdn.banded.fm/graph.db.gz` (`CLOUDFLARE_R2_GRAPH_URL` in
+   `vite.config.ts`); `VITE_GRAPH_DB_URL` overrides it.
 
 ### Important: do NOT let the CDN set `Content-Encoding: gzip`
 
