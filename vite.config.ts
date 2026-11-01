@@ -17,10 +17,10 @@ export default defineConfig(({ mode }) => {
 
   // CDN URL for the graph DB. Cloudflare's static-assets-only Worker can't hold
   // env vars, so we can't rely on VITE_GRAPH_DB_URL being set there. Instead,
-  // default to the R2 URL on Cloudflare builds. An explicit VITE_GRAPH_DB_URL
+  // default to the R2 bucket's custom domain on Cloudflare builds (cached by
+  // Cloudflare; the bucket's r2.dev URL is off). An explicit VITE_GRAPH_DB_URL
   // env var still overrides.
-  const CLOUDFLARE_R2_GRAPH_URL =
-    "https://pub-466afa6f120c41149f30d306dc81a9ee.r2.dev/graph.db.gz";
+  const CLOUDFLARE_R2_GRAPH_URL = "https://cdn.banded.fm/graph.db.gz";
   const graphDbCdnUrl =
     process.env.VITE_GRAPH_DB_URL ?? (isCloudflareBuild ? CLOUDFLARE_R2_GRAPH_URL : "");
 
