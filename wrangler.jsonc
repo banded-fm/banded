@@ -7,7 +7,7 @@
   // workers/previews/configuration). Base path and the R2 graph URL are handled
   // at BUILD time via WORKERS_CI detection in vite.config.ts, so no vars are
   // needed here.
-  "name": "musicscenemap",
+  "name": "banded",
   "compatibility_date": "2026-10-06",
   "assets": {
     "directory": "./dist",
