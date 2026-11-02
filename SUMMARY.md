@@ -254,7 +254,8 @@ src/
 │   ├── SiteFooter.tsx    — One-line footer: the data sources (MusicBrainz, setlist.fm, Pollstar) and that connections and shows may be missing.
 │   │                       Inline tabs on desktop; hamburger menu below 640px.
 │   ├── SearchBar.tsx     — Search input, expand, reset. Responsive layout.
-│   ├── GraphView.tsx     — Force-directed 2D graph canvas (solid=expanded, outline=unexpanded).
+│   ├── GraphView.tsx     — Force-directed 2D graph canvas (filled=expanded, outline=unexpanded).
+│   │                       Nodes are rounded-rectangle bubbles with the name inside (graph/bubbles.ts sizes and wraps them); a box collision force keeps them apart; links run edge to edge.
 │   ├── GraphLegend.tsx   — Explore legend: per relationship type a checkbox, colour, arrow direction;
 │   │                       node colours. Types and defaults in src/graph/relationships.ts.
 │   ├── InfoPanel.tsx     — Side panel (desktop) / bottom sheet (mobile) for node details: group/person,
