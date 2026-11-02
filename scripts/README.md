@@ -9,16 +9,16 @@ Downloads the MusicBrainz data dump and builds the browser SQLite database (`pub
 ```bash
 brew install zstd
 python3 scripts/process_mb_dump.py                       # then add_concertdb_edges.py
-python3 scripts/process_mb_dump.py --concertdb-hops 2    # fewer hops around concert-database's artists
+python3 scripts/process_mb_dump.py --concertdb-hops 2    # fewer hops around banded-data's artists
 ```
 
 Artists: within 6 hops of the curated seeds (the game's list in
 `src/game/artists.ts`, by MusicBrainz ID), and within `--concertdb-hops`
 (`CONCERTDB_HOPS`, default 6) of each artist with a concert in the
-concert-database ledger (`CONCERTDB_LEDGER`, default
-`~/concert-database/data/ledger.sqlite`; without it, curated seeds only), over
+banded-data ledger (`CONCERTDB_LEDGER`, default
+`~/banded-data/data/ledger.sqlite`; without it, curated seeds only), over
 band relationships. If `graph.db.gz` is over `--max-gzip-mb` (74), it is
-rebuilt with one hop fewer around concert-database's artists until it fits.
+rebuilt with one hop fewer around banded-data's artists until it fits.
 
 Edges: band relationships, and `produced_for` / `collaborated_with` from an
 artist to the artists whose records they produced or sang/played/performed on
@@ -40,7 +40,7 @@ together after deleting the cached list.
 ## add_concertdb_edges.py
 
 Adds "opened for" edges (opener → headliner, `rel_type = 'opened_for'`) to
-`public/graph.db.gz` from a local concert-database ledger, read-only. Pairs are
+`public/graph.db.gz` from a local banded-data ledger, read-only. Pairs are
 those `concertdb export --musicbrainz-only` exports (both acts matched to
 MusicBrainz, no festivals or cancelled shows, confidence ≥ 0.4). Acts that
 aren't in the graph are added as nodes. Re-running replaces the previous
@@ -49,7 +49,7 @@ aren't in the graph are added as nodes. Re-running replaces the previous
 ```bash
 python3 scripts/process_mb_dump.py        # rebuilds the graph (no opened_for edges)
 python3 scripts/add_concertdb_edges.py    # then add them
-python3 scripts/add_concertdb_edges.py --ledger ~/concert-database/data/ledger.sqlite --min-conf 0.4
+python3 scripts/add_concertdb_edges.py --ledger ~/banded-data/data/ledger.sqlite --min-conf 0.4
 ```
 
 ## seed_supabase.py

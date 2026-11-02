@@ -3,7 +3,7 @@
  * Keys are prefixed to avoid collisions.
  */
 
-const PREFIX = "msm_cache_";
+const PREFIX = "banded_cache_";
 const DEFAULT_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours
 
 interface CacheEntry<T> {

@@ -5,7 +5,7 @@
  * can read for upcoming events. We only ever ask them from our own server: the
  * pollstar-city function asks Pollstar itself and shares a 24-hour cache
  * between every visitor (a city's page is fetched from Pollstar at most once a
- * day, whoever asks), and keeps the events for concert-database. The browser
+ * day, whoever asks), and keeps the events for banded-data. The browser
  * never calls Pollstar (it sends no CORS headers, and the public CORS proxy we
  * used to go through now wants an API key). When the function can't get the
  * data (Pollstar refusing with nothing cached), the request fails.

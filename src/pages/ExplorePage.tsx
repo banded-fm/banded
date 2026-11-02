@@ -154,7 +154,7 @@ export function ExplorePage() {
           }
         } else {
           // Found on the server but missing from the local graph: still worth
-          // logging, so concert-database crawls the artist into the next build.
+          // logging, so banded-data crawls the artist into the next build.
           if (lookedUpLocally && !inLocalGraph(found)) {
             const { reportMiss } = await import("../api/supabase");
             reportMiss(found, "explore-not-in-graph");

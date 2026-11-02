@@ -1,8 +1,10 @@
-# MusicSceneMap — Project Summary
+# Banded — Project Summary
 
 ## What this is
 
 A React app that visualizes music scene connections and includes a "Six Degrees of Music" game. Uses a precomputed SQLite database (from MusicBrainz data dumps) queried in the browser via WebAssembly. Deployed as a static site on GitHub Pages and/or Cloudflare (Workers Builds); see `docs/CDN_HOSTING.md`.
+
+The site is **Banded** (https://banded.fm); this repo is `rahuljaisimha/banded` (formerly Banded). Its data pipeline is `rahuljaisimha/banded-data`.
 
 The app opens on a **Home** page (no nav bar: a one-line summary and a large button per page). Features: **Explore** (graph visualization), **Play** (Six Degrees game), **Discover** (upcoming concert recommendations), and **Similarity** (score how closely an artist fits a set of artists you like, using weighted graph relationships). Discover lists upcoming Pollstar concerts at the city's top venues, streamed in as they're found and ranked by headliner similarity. Every artist input (Explore search, Discover/Similarity lists, Play's custom game) has a search-as-you-type dropdown that labels same-name artists with their MusicBrainz disambiguation: "Fuzz (US garage rock band)"; artists MusicBrainz doesn't disambiguate get no label.
 
@@ -23,18 +25,18 @@ Data pipeline (offline, run manually):
     MusicBrainz full dump (~4GB)
         → Python script extracts artists, band relationships, producer/vocal/instrument credits
         → Seeds: ~145 curated artists (6 hops) + every artist with a concert in the
-          concert-database ledger (CONCERTDB_HOPS, default 6), BFS via member_of/support_musician
+          banded-data ledger (CONCERTDB_HOPS, default 6), BFS via member_of/support_musician
         → Deduplicates memberships (any active = current, not former)
         → Credits on another artist's record → one edge per role from the credited artist
           to the record's artist: produced_for, collaborated_with (no album nodes)
         → Songs credited to several artists ("A & B", "A feat. B") → collaborated_with
           from each of the others to the first-credited artist, one count per song
         → SQLite database: nodes (persons, groups) + edges + graph_meta
-        → If graph.db.gz > 74 MB: rebuilt with one hop fewer around concert-database's
+        → If graph.db.gz > 74 MB: rebuilt with one hop fewer around banded-data's
           artists until it fits (Supabase keeps the full set)
         → Output: public/graph.db.gz (~49MB, committed to repo; also uploaded to R2 for Cloudflare)
         → seed_supabase.py writes the same artists and edges (uncut) to Postgres
-    concert-database ledger (~/concert-database/data/ledger.sqlite, read-only)
+    banded-data ledger (~/banded-data/data/ledger.sqlite, read-only)
         → scripts/add_concertdb_edges.py adds opener → headliner "opened_for" edges
           (same pairs as `concertdb export --musicbrainz-only`), adding acts that
           aren't in the graph as nodes; re-runnable, replaces its previous edges
@@ -284,12 +286,12 @@ src/
 └── index.css             — Dark theme, mobile styles (max-width: 640px block), highlight animation.
 
 scripts/
-├── process_mb_dump.py    — Downloads MusicBrainz dump, builds browser SQLite graph: curated + concert-database
+├── process_mb_dump.py    — Downloads MusicBrainz dump, builds browser SQLite graph: curated + banded-data
 │                           seeds, person/group nodes, band edges, produced_for / collaborated_with edges
 │                           (build_collaborations). Fits the download to MAX_GZIP_MB. load_graph_inputs() is
 │                           shared with seed_supabase.py.
 ├── add_concertdb_edges.py — Adds "opened_for" edges (opener → headliner) to graph.db.gz from the
-│                           concert-database ledger. Run after process_mb_dump.py.
+│                           banded-data ledger. Run after process_mb_dump.py.
 ├── seed_supabase.py      — Seeds Supabase Postgres with the same artists and edges, uncut (--dry-run counts rows).
 ├── crawl_setlistfm.py    — Daily crawl job for Setlist.fm venue data.
 └── README.md             — Script documentation.
@@ -357,7 +359,7 @@ CREATE TABLE edges (
     target TEXT NOT NULL,
     rel_type TEXT NOT NULL, -- "member_of", "former_member_of", "support_musician",
                             -- "collaborated_with" / "produced_for" (source sang/played on, or produced,
-                            --   target's records), "opened_for" (source opened for target; concert-database)
+                            --   target's records), "opened_for" (source opened for target; banded-data)
     count INTEGER           -- how often: song credits (collaborated_with / produced_for), shows
                             --   (opened_for); NULL for band edges and in graphs built before it
 );
@@ -388,13 +390,13 @@ CREATE TABLE graph_meta_added_nodes (value TEXT PRIMARY KEY); -- acts it added (
 - **Concert recommendations (Pollstar, on demand)**: Discover fetches upcoming events when asked, through the `pollstar-city` function: our server asks Pollstar and keeps the answer 24 hours in Postgres, shared by every visitor, so a page of a city's concerts costs at most one Pollstar request a day and there's no scrape job to maintain. (Before, every browser asked Pollstar through corsproxy.io, whose shared servers Pollstar saw anyway. That fallback is gone: corsproxy.io now wants an API key, so when the function can't get the data the search fails.) Concerts are ranked by headline-artist similarity reusing `similarity.ts` via a shared `graphAccess.ts` adapter. Artists absent from the graph score 0 and rank last (shown, flagged) — hit rate is a known future improvement (more graph artists / backend fallback). Ranking logic (`concerts.ts`) is pure and unit-tested; only the fetch layer touches the network.
 - **Tiered graph coverage (Option 4)**: `src/pages/tieredGraphAccess.ts` wraps the core sql.js `GraphAccess` and, for artists NOT in the core graph, falls back through Tier 2 (Postgres `graph-neighbors` edge function) → Tier 3 (MusicBrainz live). (Discogs is a planned Tier 4, deferred.) Because the scorer's `GraphAccess` is synchronous but Tier 2/3 are async, it works in two phases: `prepareArtists(names)` (async prefetch of out-of-core artists → node + 1-hop neighbors, cached 24h, concurrent dupes deduped/shared) then `build()` returns a sync facade (core first, then overlay). Similarity and Concerts call `prepareArtists` before scoring, so out-of-core artists (esp. small concert headliners) now resolve instead of scoring 0. Tier 2 returns 1 hop only — reduced multi-hop accuracy for out-of-core artists is an accepted tradeoff. Postgres holds every artist the build reaches, never cut for size (plus the artists of records they worked on), so it covers what the browser graph leaves out when the size budget trims it; MusicBrainz (Tier 3) covers the rest.
 - **Collaborations instead of albums**: a producer, vocal, instrument or performer credit on another artist's record becomes one directed edge from the credited artist to the record's (release group's) first credited artist: `produced_for` for producing, `collaborated_with` for singing/playing/performing (Josh Homme → Arctic Monkeys for Humbug). Engineering credits (mix, engineer, recording), credits on an artist's own records, credits between a band and its current or former members (the membership edge already covers them) and "Various Artists" compilations are left out. Postgres keeps the number of song credits in `relationships.count`; the browser graph has no count column. No album nodes or album table anywhere (it replaced person↔person `collaborator` co-credit pairs, about half as many edges). A song credited to several artists ("Evan Honer & Wyatt Flores") also counts as a `collaborated_with` credit from each of the other artists to the first-credited one, even without a vocal or instrument credit; a song the same artist already has a performing credit on isn't counted twice (parse_shared_credits / parse_shared_songs read `artist_credit_name` and `recording`). A pair known only from a shared song doesn't bring a new artist into the graph (record_artists skips it): those pairs outnumber all other collaborations about two to one, and letting them add artists pushed graph.db.gz to ~103 MB; their edges are kept when both artists are in the graph anyway. Weights (placeholders): `collaborated_with` 0.5, `produced_for` 0.45.
-- **Seeds and size budget**: the graph is every artist within 6 hops of the curated seeds and within `CONCERTDB_HOPS` (default 6) of each artist with a concert in concert-database, over band relationships, plus the artists whose records those artists played on or produced (`record_artists`, ~28k: e.g. Zach Bryan, reached only through the musicians on his records; Postgres always had them). The browser download is held under 74 MB (60.5 MB with the record artists, 48 MB without): if `graph.db.gz` comes out over `MAX_GZIP_MB` (74), `process_mb_dump.py` rebuilds it with one hop fewer around concert-database's artists. The limit can be generous because the download never blocks a page (lazy loading, Postgres answers meanwhile). Postgres is never cut, so Tier 2 covers what the browser graph leaves out. `graph_meta` records the hops used and the number of record artists.
+- **Seeds and size budget**: the graph is every artist within 6 hops of the curated seeds and within `CONCERTDB_HOPS` (default 6) of each artist with a concert in banded-data, over band relationships, plus the artists whose records those artists played on or produced (`record_artists`, ~28k: e.g. Zach Bryan, reached only through the musicians on his records; Postgres always had them). The browser download is held under 74 MB (60.5 MB with the record artists, 48 MB without): if `graph.db.gz` comes out over `MAX_GZIP_MB` (74), `process_mb_dump.py` rebuilds it with one hop fewer around banded-data's artists. The limit can be generous because the download never blocks a page (lazy loading, Postgres answers meanwhile). Postgres is never cut, so Tier 2 covers what the browser graph leaves out. `graph_meta` records the hops used and the number of record artists.
 - **Game valid moves**: Scrollable list of all valid connections from current node. Sorted by relationship priority (members → former → support). Filter by typing. No revisiting. Undo support.
 - **Par scoring**: Par = shortest path node count. Re-rolls if < 3 hops.
-- **Seed artists**: 148 recognizable artists (persons + iconic bands) at 6 hops, the game's puzzle endpoints; plus concert-database's artists (see "Seeds and size budget"). Listed once, in `src/game/artists.ts`, by MusicBrainz ID with the name for readability: names are ambiguous (several "Lemmy"s, five "Nirvana"s) or change ("Kanye West" is "Ye" on MusicBrainz), and the build used to pick an arbitrary namesake. The game resolves them by ID too; a seed missing from the dump is reported by the build.
-- **Concert ties from concert-database**: `scripts/add_concertdb_edges.py` reads the concert-database ledger (read-only; data flows one way, concert-database never reads the graph) and adds one `opened_for` edge per (opener, headliner) pair: both matched to MusicBrainz, not a festival, not cancelled, billing confidence ≥ 0.4. Every act in these pairs has a concert, so the build's concert-database seeds already put it in the graph; an act missing from an older or trimmed graph is added as a node (name, type, disambiguation; no area). `graphDb.getNeighbors` reports each edge's direction (`outgoing`) so Explore draws opener → headliner; Similarity weighs `opened_for` at 0.45 (placeholder, below band ties, above a single album credit) and labels "opened for / headlined". The game ignores it (it uses band relationships only). Postgres (`graph-neighbors`) doesn't have these edges yet.
+- **Seed artists**: 148 recognizable artists (persons + iconic bands) at 6 hops, the game's puzzle endpoints; plus banded-data's artists (see "Seeds and size budget"). Listed once, in `src/game/artists.ts`, by MusicBrainz ID with the name for readability: names are ambiguous (several "Lemmy"s, five "Nirvana"s) or change ("Kanye West" is "Ye" on MusicBrainz), and the build used to pick an arbitrary namesake. The game resolves them by ID too; a seed missing from the dump is reported by the build.
+- **Concert ties from banded-data**: `scripts/add_concertdb_edges.py` reads the banded-data ledger (read-only; data flows one way, banded-data never reads the graph) and adds one `opened_for` edge per (opener, headliner) pair: both matched to MusicBrainz, not a festival, not cancelled, billing confidence ≥ 0.4. Every act in these pairs has a concert, so the build's banded-data seeds already put it in the graph; an act missing from an older or trimmed graph is added as a node (name, type, disambiguation; no area). `graphDb.getNeighbors` reports each edge's direction (`outgoing`) so Explore draws opener → headliner; Similarity weighs `opened_for` at 0.45 (placeholder, below band ties, above a single album credit) and labels "opened for / headlined". The game ignores it (it uses band relationships only). Postgres (`graph-neighbors`) doesn't have these edges yet.
 - **Same-type pairs**: Game always pairs person↔person or group↔group.
-- **Vite base (host-aware)**: `vite.config.ts` sets `base` by precedence: explicit `DEPLOY_BASE` env var → Cloudflare build (`WORKERS_CI` from Workers Builds, or `CF_PAGES` from Pages) → `/` → GitHub Pages production default `/MusicSceneMap/` → dev `/`. Cloudflare serves at the domain root, so the GitHub Pages base there causes a blank page (404'd assets) — hence the auto-detection. It also inlines the R2 graph URL on Cloudflare builds (see `__GRAPH_DB_CDN_URL__`), since static-assets-only Workers can't hold env vars.
+- **Vite base (host-aware)**: `vite.config.ts` sets `base` by precedence: explicit `DEPLOY_BASE` env var → Cloudflare build (`WORKERS_CI` from Workers Builds, or `CF_PAGES` from Pages) → `/` → GitHub Pages production default `/Banded/` → dev `/`. Cloudflare serves at the domain root, so the GitHub Pages base there causes a blank page (404'd assets) — hence the auto-detection. It also inlines the R2 graph URL on Cloudflare builds (see `__GRAPH_DB_CDN_URL__`), since static-assets-only Workers can't hold env vars.
 - **graph.db.gz loader (local-first, CDN fallback)**: `graphDb.ts` tries the same-origin committed file first, then falls back to the CDN URL (`VITE_GRAPH_DB_URL` or the build-time `__GRAPH_DB_CDN_URL__`) if the local file is missing/HTML-fallback. On Cloudflare the local file is excluded from upload via `public/.assetsignore` (25 MiB asset cap), so it loads from R2.
 - **graph.db.gz committed to repo**: Deployed with the site, same origin = no CORS. Fits GitHub's 100MB file limit. **Cloudflare Pages caps static assets at 25 MiB**, below the file size — to deploy there, host `graph.db.gz` on a CDN and set `VITE_GRAPH_DB_URL` (see `docs/CDN_HOSTING.md`). `graphDb.ts` uses `VITE_GRAPH_DB_URL || same-origin file`. **GitHub Releases was tried and rejected**: release-asset URLs 302-redirect to `objects.githubusercontent.com` without reliable `Access-Control-Allow-Origin`, so cross-origin `fetch` fails CORS. Use Cloudflare R2 (free egress, controllable CORS policy, serves raw gzip bytes so the magic-number decompression path still works) or jsDelivr.
 - **Mostly client-side**: The site is static (GitHub Pages / Cloudflare) and graph queries run in the browser. Network calls are limited to Supabase edge functions (venue search, Tier-2 graph lookups, miss reporting), MusicBrainz (Tier-3 fallback) and Pollstar (concerts).
@@ -421,9 +423,9 @@ python3 scripts/process_mb_dump.py
 When hosting the graph on R2 (Cloudflare), re-upload after a regen:
 
 ```bash
-npm run add-concerts   # refresh the "opened_for" edges from the concert-database ledger
+npm run add-concerts   # refresh the "opened_for" edges from the banded-data ledger
 npm run upload-graph   # upload public/graph.db.gz to R2 (wrangler, --remote)
-npm run regen-graph    # regenerate (MusicBrainz + concert-database) then upload in one step
+npm run regen-graph    # regenerate (MusicBrainz + banded-data) then upload in one step
 ```
 
 ## Testing
@@ -468,14 +470,14 @@ PostgreSQL database on Supabase (free tier, 500MB). Stores the full graph + venu
 - `report-miss` — Lightweight POST endpoint for frontend to report artists missing from browser SQLite.
 - `graph-neighbors` — Tier-2 graph lookup: artist + 1-hop neighbors from Postgres for artists missing from the browser SQLite, and for every lookup while that graph is still downloading. `log=0` skips the miss log. `?q=` is a search mode for the artist dropdowns (ranked matches with disambiguation and area, no neighbors, never logs).
 
-**User-requested data for concert-database** (`user_requested_data`, migration 009: source, key, data JSONB, version, fetched_at, seq; one row per (source, key)). Data the app fetches from outside sources because a user asked for something, kept so concert-database can store it like its own crawls without spending its own requests; nothing kept is about the user:
+**User-requested data for banded-data** (`user_requested_data`, migration 009: source, key, data JSONB, version, fetched_at, seq; one row per (source, key)). Data the app fetches from outside sources because a user asked for something, kept so banded-data can store it like its own crawls without spending its own requests; nothing kept is about the user:
 - `setlistfm` (key = setlist id): venue-search upserts every setlist it fetches (the artist-in-city search and each venue's setlists) as setlist.fm returned it; version = its lastUpdated.
 - `pollstar` (key = Pollstar venue id; data = { venue, ...Pollstar's events response }) and `pollstar_search` (key = the lowercased venue search; Pollstar's autocomplete response): written by the `pollstar-events` function (Discover's old venue-by-venue search; `pollstar_search` rows are now written by `pollstar-city` too), which fetched Pollstar server-side for Discover's Concerts and serves every visitor from these rows while they're under 24 hours old (a venue is fetched from Pollstar at most once a day, whoever asks). When Pollstar refuses, an older row is served as stale; with nothing cached the function answers 503. The venue's name and city come from the cached search that found it, so nothing a browser sends is stored. (Migration 009's comments still describe the earlier browser-post design, replaced before it shipped.)
-- `pollstar_city` (key = "<Pollstar city id>:<page>", or "<city id>:<from>:<to>:<page>" for a date range; Pollstar's response for that page of the city's upcoming events, 100 a page, each event with its full venue): written by the `pollstar-city` function, same 24-hour cache and stale/503 rules. concert-database has no ingest for it yet.
-`seq` moves forward only when a row is added or its version changes (trigger). concert-database's `msm-requested` step (a step of every run, same read-only login as the misses) reads the rows past its last `seq` and hands each to its source's ingest. A new source: an upsert in the edge function that fetches it, plus an ingest in concert-database (rows from sources it has no ingest for are skipped).
+- `pollstar_city` (key = "<Pollstar city id>:<page>", or "<city id>:<from>:<to>:<page>" for a date range; Pollstar's response for that page of the city's upcoming events, 100 a page, each event with its full venue): written by the `pollstar-city` function, same 24-hour cache and stale/503 rules. banded-data stores it like its own Pollstar crawl.
+`seq` moves forward only when a row is added or its version changes (trigger). banded-data's `user-requested` step (a step of every run, same read-only login as the misses) reads the rows past its last `seq` and hands each to its source's ingest. A new source: an upsert in the edge function that fetches it, plus an ingest in banded-data (rows from sources it has no ingest for are skipped).
 
 
-**Search miss tracking** (`search_misses`: query, source). concert-database reads new rows every night
+**Search miss tracking** (`search_misses`: query, source). banded-data reads new rows every night
 (`concertdb misses`, read-only role from migration 007), resolves them to MusicBrainz IDs and crawls those
 artists' concerts first, so they join the graph at the next rebuild:
 - `dropdown-musicbrainz-pick` — the user picked an artist only MusicBrainz knows (query = its MBID)
@@ -485,11 +487,11 @@ artists' concerts first, so they join the graph at the next rebuild:
 - `venue-search-missing-artist` — resolved via MusicBrainz, added to Supabase (edge function logs)
 - `venue-search-not-found` — not found anywhere, likely mistype (edge function logs)
 
-**Size**: was ~320MB with albums and per-album credits. With the collaborations model and the concert-database seeds, 237MB after re-seeding (Supabase dashboard → Settings → Usage).
+**Size**: was ~320MB with albums and per-album credits. With the collaborations model and the banded-data seeds, 237MB after re-seeding (Supabase dashboard → Settings → Usage).
 
 ## Deploying
 
-**Frontend (GitHub Pages)**: Push to `main`. GitHub Actions builds and deploys to Pages automatically (base `/MusicSceneMap/`, graph served same-origin).
+**Frontend (GitHub Pages)**: Push to `main`. GitHub Actions builds and deploys to Pages automatically (base `/banded/`, graph served same-origin).
 
 **Frontend (Cloudflare, Workers Builds)**: Build command `npm run build`, deploy `npx wrangler deploy`, output `dist`. No env vars needed — the build auto-detects Cloudflare (`WORKERS_CI`) to set base `/` and inline the R2 graph URL. `public/.assetsignore` keeps the oversized `graph.db.gz` out of the upload (25 MiB cap); the app loads it from R2. R2 bucket needs public access + a CORS policy allowing the site origins. Full setup in `docs/CDN_HOSTING.md`.
 

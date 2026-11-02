@@ -37,7 +37,7 @@ export function Layout() {
   return (
     <>
       <nav className="app-nav" style={styles.nav}>
-        <Link to="/" viewTransition className="nav-brand" style={styles.brand} aria-label="MusicSceneMap home">MusicSceneMap</Link>
+        <Link to="/" viewTransition className="nav-brand" style={styles.brand} aria-label="Banded home">Banded</Link>
         {/* Mobile only (see index.css): current tab + hamburger toggle */}
         {current && <span className="nav-current" style={styles.current}>{current.label}</span>}
         <button

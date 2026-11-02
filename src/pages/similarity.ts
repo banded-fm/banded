@@ -111,7 +111,7 @@ export const REL_WEIGHTS: Record<string, number> = {
   collaborator: 0.8, // album co-credit between two people (graphs built before collaborated_with)
   collaborated_with: 0.8, // sang, played or performed on the other artist's records
   produced_for: 0.3, // produced the other artist's records: weak once, never as close as the others (REPEATS)
-  opened_for: 0.8, // opened for the headliner at least once (concert-database)
+  opened_for: 0.8, // opened for the headliner at least once (banded-data)
   // Album credits (person -> album), from older graphs that had album nodes.
   producer: 0.4,
   vocal: 0.35,

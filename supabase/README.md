@@ -60,7 +60,7 @@ GET https://lwqkjtzqjgacgvfjiyxg.supabase.co/functions/v1/venue-search
 
 ## pollstar-city
 
-Discover's Pollstar data, fetched server-side and shared by every visitor through a 24-hour cache (`user_requested_data`, also read by concert-database). Replaces `pollstar-events` (venue by venue), which stays deployed, unused, until it's deleted.
+Discover's Pollstar data, fetched server-side and shared by every visitor through a 24-hour cache (`user_requested_data`, also read by banded-data). Replaces `pollstar-events` (venue by venue), which stays deployed, unused, until it's deleted.
 
 ```
 GET https://lwqkjtzqjgacgvfjiyxg.supabase.co/functions/v1/pollstar-city?search=Berlin
@@ -166,7 +166,7 @@ Ranked: exact name, names starting with `q`, names with a word starting with `q`
 
 Relationship types returned: `member_of`, `former_member_of`, `support_musician`, `collaborated_with` and `produced_for` (from the credited artist to the record's artist; `outgoing` says which end the looked-up artist is), and `opened_for` once Postgres has it.
 
-> Postgres is seeded (`seed_supabase.py`) with every artist within reach of the curated seeds and of concert-database's artists, never cut down for size; the browser graph is the same set, cut down to fit its 74 MB download limit when it has to be. So Postgres covers the artists the browser graph leaves out.
+> Postgres is seeded (`seed_supabase.py`) with every artist within reach of the curated seeds and of banded-data's artists, never cut down for size; the browser graph is the same set, cut down to fit its 74 MB download limit when it has to be. So Postgres covers the artists the browser graph leaves out.
 
 ---
 
@@ -199,5 +199,5 @@ Run in the Supabase SQL Editor (Dashboard → SQL Editor):
 4. `migrations/004_artist_search.sql` — trigram index for `graph-neighbors` search mode, `artists.area` (re-run `seed_supabase.py` after it to fill `area`)
 5. `migrations/005_collaborations.sql` — removes the album table and the per-album credit rows (seed_supabase.py now writes `collaborated_with` / `produced_for` artist → artist rows with the song-credit count), and two redundant indexes. Then run `VACUUM FULL relationships;` on its own to give the space back, re-run `seed_supabase.py`, and redeploy `graph-neighbors`.
 6. `migrations/006_genres.sql` — `genres` table and `artists.genre_ids` (MusicBrainz genres with 2+ votes, top 3 plus ties). Then re-run `seed_supabase.py` to fill them.
-7. `migrations/007_search_misses_reader.sql` — read-only role `concertdb_misses` (can only read `search_misses`) for concert-database's nightly `misses` step. Then give it a login outside git: `ALTER ROLE concertdb_misses LOGIN PASSWORD '…'`, and set `MSM_MISSES_DB_URL` in concert-database's `.env`.
+7. `migrations/007_search_misses_reader.sql` — read-only role `concertdb_misses` (can only read `search_misses`) for banded-data's nightly `misses` step. Then give it a login outside git: `ALTER ROLE concertdb_misses LOGIN PASSWORD '…'`, and set `BANDED_MISSES_DB_URL` in banded-data's `.env`.
 8. `migrations/008_row_level_security.sql` — row-level security on every table, so the API's `anon` / `authenticated` roles (anyone with the anon key) can't read or change anything. Edge functions (service role), the seed scripts (table owner) and `concertdb_misses` (its own policy) are unaffected. A new table needs `ALTER TABLE … ENABLE ROW LEVEL SECURITY` too.

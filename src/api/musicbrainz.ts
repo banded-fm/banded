@@ -6,7 +6,7 @@
  */
 
 const BASE_URL = "https://musicbrainz.org/ws/2";
-const USER_AGENT = "MusicSceneMap/0.0.1 (https://github.com/musicscenemap)";
+const USER_AGENT = "Banded/0.0.1 (https://banded.fm)";
 
 import { debugLog } from "../debug/DebugLog";
 import { cachedFetch } from "./cache";

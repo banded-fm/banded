@@ -114,7 +114,7 @@ export class SceneGraph {
 
   // --- Persistence ---
 
-  private static STORAGE_KEY = "musicscenemap_graph";
+  private static STORAGE_KEY = "banded_graph";
 
   save(): void {
     const data = {

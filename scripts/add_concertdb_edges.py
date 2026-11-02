@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Add "opened for" edges from concert-database to the browser graph.
+"""Add "opened for" edges from banded-data to the browser graph.
 
-Reads the concert-database ledger (https://github.com/rahuljaisimha/concert-database)
+Reads the banded-data ledger (https://github.com/rahuljaisimha/banded-data)
 directly and adds one edge per (opener, headliner) pair to public/graph.db.gz:
 
     edges(source = opener MBID, target = headliner MBID, rel_type = 'opened_for')
@@ -18,8 +18,8 @@ process_mb_dump.py (which rebuilds the graph without them):
     python3 scripts/add_concertdb_edges.py                       # default paths
     python3 scripts/add_concertdb_edges.py --ledger PATH --graph public/graph.db.gz
 
-The ledger defaults to $CONCERTDB_LEDGER, else ~/concert-database/data/ledger.sqlite.
-concert-database never reads the graph back: data flows one way, ledger -> graph.
+The ledger defaults to $CONCERTDB_LEDGER, else ~/banded-data/data/ledger.sqlite.
+banded-data never reads the graph back: data flows one way, ledger -> graph.
 """
 
 import argparse
@@ -34,10 +34,10 @@ from pathlib import Path
 
 REL_TYPE = "opened_for"
 DEFAULT_LEDGER = Path(os.environ.get("CONCERTDB_LEDGER")
-                      or Path.home() / "concert-database" / "data" / "ledger.sqlite")
+                      or Path.home() / "banded-data" / "data" / "ledger.sqlite")
 DEFAULT_GRAPH = Path(__file__).resolve().parent.parent / "public" / "graph.db.gz"
 
-# Same rule as concert-database's `export --musicbrainz-only` (concertdb/export.py).
+# Same rule as banded-data's `export --musicbrainz-only` (concertdb/export.py).
 PAIRS = """
 SELECT o.artist_id AS opener, h.artist_id AS headliner, COUNT(*) AS shows
 FROM billings o
@@ -110,7 +110,7 @@ def add_edges(graph_db: Path, pairs: list[tuple], acts: dict[str, tuple], ledger
         conn.executemany("INSERT INTO graph_meta_added_nodes VALUES (?)", [(m,) for m in missing])
         conn.execute("CREATE TABLE IF NOT EXISTS graph_meta (key TEXT PRIMARY KEY, value TEXT)")
         conn.executemany("INSERT OR REPLACE INTO graph_meta VALUES (?, ?)", [
-            ("opened_for_source", "concert-database ledger"),
+            ("opened_for_source", "banded-data ledger"),
             ("opened_for_added_at", datetime.now(timezone.utc).replace(microsecond=0).isoformat()),
             ("opened_for_edges", str(len(pairs))),
             ("opened_for_new_nodes", str(len(missing))),
@@ -131,7 +131,7 @@ def main(argv=None) -> int:
     p.add_argument("--min-conf", type=float, default=0.4)
     args = p.parse_args(argv)
     if not args.ledger.exists():
-        print(f"no concert-database ledger at {args.ledger} (set --ledger or $CONCERTDB_LEDGER)", file=sys.stderr)
+        print(f"no banded-data ledger at {args.ledger} (set --ledger or $CONCERTDB_LEDGER)", file=sys.stderr)
         return 1
 
     pairs, acts = read_pairs(args.ledger, args.min_conf)

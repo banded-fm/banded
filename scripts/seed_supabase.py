@@ -3,7 +3,7 @@
 Seed Supabase PostgreSQL with the music graph.
 
 Same inputs as process_mb_dump.py (load_graph_inputs): the curated seed artists
-at 6 hops plus every artist with a concert in concert-database at CONCERTDB_HOPS
+at 6 hops plus every artist with a concert in banded-data at CONCERTDB_HOPS
 (default 6), over band relationships. Unlike the browser graph it is never cut
 down to fit a download size: Postgres answers for the artists graph.db.gz leaves out.
 
@@ -93,7 +93,7 @@ def insert(conn, sql, rows, label):
 
 def main():
     print("=" * 60)
-    print("MusicSceneMap: Seed Supabase")
+    print("Banded: Seed Supabase")
     print("=" * 60)
 
     if not all((mb.DATA_DIR / t).exists() for t in ["mbdump/artist", *mb.DERIVED_TABLES]):

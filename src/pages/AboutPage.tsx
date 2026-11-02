@@ -2,9 +2,9 @@ export function AboutPage() {
   return (
     <div className="page-container" style={styles.container}>
       <div style={styles.content}>
-        <h1 style={styles.title}>About MusicSceneMap</h1>
+        <h1 style={styles.title}>About Banded</h1>
         <p style={styles.paragraph}>
-          MusicSceneMap is a graph-powered music discovery tool that maps the relationships
+          Banded is a graph-powered music discovery tool that maps the relationships
           between artists, musicians, and groups. Instead of recommending music based on genre
           tags or listening history, it reveals the real-world connections — shared group members,
           side projects, and collaborations — that create music scenes.
@@ -99,8 +99,8 @@ export function AboutPage() {
 
         <h2 style={styles.heading}>Source Code</h2>
         <p style={styles.paragraph}>
-          <a href="https://github.com/rahuljaisimha/MusicSceneMap" target="_blank" rel="noreferrer" style={styles.link}>
-            github.com/rahuljaisimha/MusicSceneMap
+          <a href="https://github.com/rahuljaisimha/banded" target="_blank" rel="noreferrer" style={styles.link}>
+            github.com/rahuljaisimha/banded
           </a>
         </p>
       </div>

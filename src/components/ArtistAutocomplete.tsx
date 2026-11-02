@@ -77,7 +77,7 @@ export function ArtistAutocomplete({
 
   const pick = (s: ArtistSuggestion) => {
     // Picked an artist only MusicBrainz knows: log its MBID as a search miss, so
-    // concert-database crawls it and it joins the graph (concertdb misses).
+    // banded-data crawls it and it joins the graph (concertdb misses).
     if (s.fromMusicBrainz) {
       import("../api/supabase").then(({ reportMiss }) => reportMiss(s.id, "dropdown-musicbrainz-pick")).catch(() => {});
     }
