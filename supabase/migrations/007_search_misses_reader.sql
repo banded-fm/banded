@@ -1,6 +1,6 @@
--- Migration 007: a read-only login for concert-database's `misses` step
+-- Migration 007: a read-only login for banded-data's `misses` step
 --
--- concert-database (github.com/rahuljaisimha/concert-database, concertdb/misses.py)
+-- banded-data (github.com/rahuljaisimha/banded-data, concertdb/misses.py)
 -- reads new rows of search_misses every night and crawls those artists' concerts,
 -- so they join the graph at the next rebuild. It connects as this role, which can
 -- read search_misses and nothing else (no other table, no writes).
@@ -8,8 +8,8 @@
 -- The role is created without a login. Give it one outside git (the password is
 -- a secret), in the SQL editor:
 --   ALTER ROLE concertdb_misses LOGIN PASSWORD '<a long random password>';
--- and set in concert-database's .env (Supavisor pooler: user is <role>.<project ref>):
---   MSM_MISSES_DB_URL=postgresql://concertdb_misses.<project ref>:<password>@<pooler host>:5432/postgres?sslmode=require
+-- and set in banded-data's .env (Supavisor pooler: user is <role>.<project ref>):
+--   BANDED_MISSES_DB_URL=postgresql://concertdb_misses.<project ref>:<password>@<pooler host>:5432/postgres?sslmode=require
 
 DO $$
 BEGIN

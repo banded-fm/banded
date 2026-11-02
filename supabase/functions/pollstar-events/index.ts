@@ -13,7 +13,7 @@
  * The cache is the user_requested_data table (migration 009): a venue search
  * is a `pollstar_search` row (key: the lowercased search), a venue's events a
  * `pollstar` row (key: the venue id; data: { venue, ...Pollstar's events
- * response }), which concert-database stores like its own Pollstar crawl. A row
+ * response }), which banded-data stores like its own Pollstar crawl. A row
  * under CACHE_TTL_MS old is served without asking Pollstar; when Pollstar
  * refuses, an older row is served as "stale". Everything stored was fetched
  * here, so nothing a browser sends ends up in the table: the venue's name and

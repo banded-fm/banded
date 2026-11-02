@@ -1,11 +1,11 @@
--- Migration 009: keep the user-requested data the app fetches, for concert-database
+-- Migration 009: keep the user-requested data the app fetches, for banded-data
 --
 -- The app fetches concert data from outside sources because a user asked for
 -- something: venue-search calls setlist.fm (an artist's setlists in a city,
 -- then each venue's setlists); Discover's Concerts fetches Pollstar venues'
 -- upcoming events in the browser and hands them to the user-requested-data
--- function. Both are kept here, one row per (source, key), so concert-database
--- (github.com/rahuljaisimha/concert-database, concertdb/msm_requested.py) can
+-- function. Both are kept here, one row per (source, key), so banded-data
+-- (github.com/rahuljaisimha/banded-data, concertdb/user_requested.py) can
 -- store them like its own crawls without spending its own requests. Nothing
 -- kept is about the user.
 --
@@ -48,7 +48,7 @@ CREATE TRIGGER user_requested_data_bump_seq BEFORE UPDATE ON public.user_request
 ALTER TABLE public.user_requested_data ENABLE ROW LEVEL SECURITY;
 REVOKE TRUNCATE, REFERENCES, TRIGGER ON public.user_requested_data FROM anon, authenticated;
 
--- concert-database's read-only login (migration 007) reads it too.
+-- banded-data's read-only login (migration 007) reads it too.
 GRANT SELECT ON public.user_requested_data TO concertdb_misses;
 DROP POLICY IF EXISTS concertdb_misses_read ON public.user_requested_data;
 CREATE POLICY concertdb_misses_read ON public.user_requested_data

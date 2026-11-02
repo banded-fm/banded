@@ -8,21 +8,21 @@ seed_supabase.py builds Postgres from the same inputs (load_graph_inputs).
 
 Usage:
     python3 scripts/process_mb_dump.py                      # then: python3 scripts/add_concertdb_edges.py
-    python3 scripts/process_mb_dump.py --concertdb-hops 2   # fewer hops around concert-database's artists
+    python3 scripts/process_mb_dump.py --concertdb-hops 2   # fewer hops around banded-data's artists
 
 Requirements:
     - Python 3.10+
     - ~25GB free disk space (download + extracted tables), ~10GB RAM
     - Internet connection (for the initial download)
-    - Optional: a concert-database ledger (CONCERTDB_LEDGER, default
-      ~/concert-database/data/ledger.sqlite); without it only the curated seeds are used
+    - Optional: a banded-data ledger (CONCERTDB_LEDGER, default
+      ~/banded-data/data/ledger.sqlite); without it only the curated seeds are used
 
 Which artists: every artist within 6 hops of the curated seeds (src/game/artists.ts, by MBID)
-and of each artist with a concert in concert-database (CONCERTDB_HOPS, default 6),
+and of each artist with a concert in banded-data (CONCERTDB_HOPS, default 6),
 over band relationships (member of / supporting musician), plus the artists whose
 records they played on or produced (record_artists: e.g. Zach Bryan, reached only
 through the musicians on his records). If graph.db.gz comes out over MAX_GZIP_MB,
-it is rebuilt with one hop fewer around concert-database's artists until it fits;
+it is rebuilt with one hop fewer around banded-data's artists until it fits;
 Supabase keeps the full set.
 
 Edges: band relationships, plus collaborations: a producer / vocal / instrument / performer
@@ -66,7 +66,7 @@ TOP_GENRES = 3               # plus any tied with the third
 GENRE_LIST_URL = "https://musicbrainz.org/ws/2/genre/all?fmt=txt"
 GENRES_FILE = DATA_DIR / "genres.txt"
 DERIVED_TABLES = ["mbdump/tag", "mbdump/artist_tag"]
-USER_AGENT = "MusicSceneMap/0.1 ( https://github.com/rahuljaisimha/MusicSceneMap )"
+USER_AGENT = "Banded/0.1 ( https://banded.fm )"
 
 # Relationship types we care about for artist-to-artist (from MusicBrainz link_type table)
 RELEVANT_ARTIST_ARTIST_TYPES = {
@@ -700,8 +700,8 @@ def build_collaborations(
 # --- Which artists are in the graph -------------------------------------------
 
 # Curated seed artists: the Six Degrees game's list (src/game/artists.ts), by
-# MusicBrainz ID; plus the artists with concerts in concert-database
-# (https://github.com/rahuljaisimha/concert-database), read from its ledger. The
+# MusicBrainz ID; plus the artists with concerts in banded-data
+# (https://github.com/rahuljaisimha/banded-data), read from its ledger. The
 # graph is every artist within a seed's hop budget over band relationships
 # (member of / supporting musician).
 GAME_ARTISTS_FILE = PROJECT_DIR / "src" / "game" / "artists.ts"
@@ -720,9 +720,9 @@ def curated_seed_list(path: Path = GAME_ARTISTS_FILE) -> list[tuple[str, str]]:
 CURATED_HOPS = 6
 CONCERTDB_HOPS = int(os.environ.get("CONCERTDB_HOPS") or 6)
 CONCERTDB_LEDGER = Path(os.environ.get("CONCERTDB_LEDGER")
-                        or Path.home() / "concert-database" / "data" / "ledger.sqlite")
+                        or Path.home() / "banded-data" / "data" / "ledger.sqlite")
 # The browser download (graph.db.gz). If the graph comes out bigger, it is rebuilt
-# with fewer hops around concert-database's artists (Supabase keeps them all and
+# with fewer hops around banded-data's artists (Supabase keeps them all and
 # answers for the rest). The app downloads it in the background (preloadDb) and
 # answers from Supabase until it has loaded, so a bigger file only delays the
 # local graph, it doesn't block the page.
@@ -752,12 +752,12 @@ def resolve_curated_seeds(artists: dict[int, dict]) -> set[str]:
 
 
 def concertdb_seeds(ledger: Path, artists: dict[int, dict]) -> set[str]:
-    """MusicBrainz IDs of artists with at least one concert in the concert-database
+    """MusicBrainz IDs of artists with at least one concert in the banded-data
     ledger (read-only). Empty, with a warning, if there is no ledger."""
     import sqlite3
 
     if not ledger.exists():
-        print(f"  WARNING: no concert-database ledger at {ledger}: curated seeds only"
+        print(f"  WARNING: no banded-data ledger at {ledger}: curated seeds only"
               " (set CONCERTDB_LEDGER)")
         return set()
     conn = sqlite3.connect(f"file:{ledger}?mode=ro", uri=True)
@@ -769,7 +769,7 @@ def concertdb_seeds(ledger: Path, artists: dict[int, dict]) -> set[str]:
         conn.close()
     known = {data["gid"] for data in artists.values()}
     seeds = mbids & known
-    print(f"  concert-database seeds: {len(seeds)} artists with concerts ({len(mbids) - len(seeds)} not in this dump)")
+    print(f"  banded-data seeds: {len(seeds)} artists with concerts ({len(mbids) - len(seeds)} not in this dump)")
     return seeds
 
 
@@ -966,7 +966,7 @@ def main():
 
     ap = argparse.ArgumentParser(description="Build public/graph.db.gz from the MusicBrainz dump")
     ap.add_argument("--concertdb-hops", type=int, default=CONCERTDB_HOPS,
-                    help="hops around concert-database's artists (lowered automatically to fit --max-gzip-mb)")
+                    help="hops around banded-data's artists (lowered automatically to fit --max-gzip-mb)")
     ap.add_argument("--max-gzip-mb", type=float, default=MAX_GZIP_MB)
     args = ap.parse_args()
 
@@ -983,7 +983,7 @@ def main():
     OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
     gz_path = OUTPUT_FILE.with_suffix(".db.gz")
     for hops in range(args.concertdb_hops, -1, -1):
-        print(f"\nconcert-database artists at {hops} hops (curated seeds at {CURATED_HOPS}):")
+        print(f"\nbanded-data artists at {hops} hops (curated seeds at {CURATED_HOPS}):")
         reachable = bfs_reachable(seed_budgets(curated, concert, hops), relationships, artists)
         owners = record_artists(collaborations, reachable, shared_only)
         print(f"  + {len(owners)} record artists outside it (their records' credits are in the graph)")
@@ -999,11 +999,11 @@ def main():
         print(f"  graph.db.gz: {gz_mb:.1f} MB (limit {args.max_gzip_mb} MB)")
         if gz_mb <= args.max_gzip_mb or not concert:
             break
-        print("  Too big for the browser download: one hop fewer around concert-database's artists")
+        print("  Too big for the browser download: one hop fewer around banded-data's artists")
 
     print()
     print("=" * 60)
-    print(f"Done: {node_count} nodes, {edge_count} edges, concert-database hops {hops}")
+    print(f"Done: {node_count} nodes, {edge_count} edges, banded-data hops {hops}")
     print(f"  SQLite: {OUTPUT_FILE.stat().st_size / 1e6:.1f} MB, gzipped: {gz_mb:.1f} MB")
     print("  Next: python3 scripts/add_concertdb_edges.py (opened_for edges)")
     print("=" * 60)

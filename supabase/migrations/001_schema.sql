@@ -1,4 +1,4 @@
--- MusicSceneMap Schema
+-- Banded Schema
 -- Migration 001: Initial schema
 --
 -- Entity tables for typed data, one relationships table for all edges.

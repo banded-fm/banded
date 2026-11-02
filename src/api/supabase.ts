@@ -3,7 +3,7 @@ const SUPABASE_FUNCTIONS_URL = "https://lwqkjtzqjgacgvfjiyxg.supabase.co/functio
 /**
  * Pollstar's JSON through our pollstar-city function: fetched by our server
  * and shared by every visitor through a 24-hour cache (and kept for
- * concert-database). Null when the function can't get it (Pollstar refusing
+ * banded-data). Null when the function can't get it (Pollstar refusing
  * with nothing cached, or the function unreachable).
  */
 export async function pollstarViaServer<T>(params: {

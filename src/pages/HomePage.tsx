@@ -14,9 +14,9 @@ export function HomePage() {
   return (
     <div className="page-container home-page" style={styles.container}>
       <div style={styles.content}>
-        <h1 className="page-title home-title" style={styles.title}>MusicSceneMap</h1>
+        <h1 className="page-title home-title" style={styles.title}>Banded</h1>
         <p style={styles.summary}>
-          MusicSceneMap maps the connections between artists: shared band members, side projects,
+          Banded maps the connections between artists: shared band members, side projects,
           collaborations and tour support.
         </p>
         <nav className="home-links" style={styles.links} aria-label="Pages">

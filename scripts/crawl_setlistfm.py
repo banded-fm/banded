@@ -202,7 +202,7 @@ def main():
     db_url, api_key = get_config()
 
     print("=" * 60)
-    print("MusicSceneMap: Setlist.fm Crawl")
+    print("Banded: Setlist.fm Crawl")
     print(f"  Limit: {args.limit} artists, {args.pages} pages each")
     print(f"  Max requests: ~{args.limit * args.pages}")
     print("=" * 60)

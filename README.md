@@ -1,10 +1,10 @@
-# MusicSceneMap
+# Banded
 
 > Discover the artists, venues, and communities that define a city's music scene.
 
 ## Overview
 
-MusicSceneMap is a graph-powered music discovery platform that helps users discover:
+Banded is a graph-powered music discovery platform that helps users discover:
 
 * Music venues
 * Concerts
@@ -13,7 +13,7 @@ MusicSceneMap is a graph-powered music discovery platform that helps users disco
 * Related musicians
 * Cities with similar musical communities
 
-Instead of recommending music based only on listening history or genre similarity, MusicSceneMap builds a map of the relationships that create real-world music scenes.
+Instead of recommending music based only on listening history or genre similarity, Banded builds a map of the relationships that create real-world music scenes.
 
 The goal is to answer questions like:
 
@@ -37,7 +37,7 @@ The app opens on a home page with a one-line summary and a large button for each
 
 Search for any artist or group and visualize their network — group members, side projects, and supporting musicians rendered as an interactive force-directed graph. Click a node to see what MusicBrainz says about it (its disambiguation, its genres, and a link to its MusicBrainz page) and to explore further. The legend explains the colours and arrows, and its checkboxes add more kinds of connection: musicians who played or sang on an artist's records, producers, and acts that opened for them.
 
-As you type, a dropdown suggests matching artists from the app's database. Each one is labelled the way MusicBrainz does it, with its disambiguation in parentheses, e.g. **Fuzz** (US garage rock band), so you can pick the right one when several artists share a name. Artists MusicBrainz doesn't disambiguate (like Alex Turner) have no label. Artists the database doesn't have are looked up on MusicBrainz; picking one of those (or an Explore search that finds nothing) is logged, and [concert-database](https://github.com/rahuljaisimha/concert-database) crawls those artists' concerts so they join the graph at its next rebuild. The same dropdown is on Discover, Similarity and the custom game in Play, and everywhere the artist you pick is the one used, even when others share its name.
+As you type, a dropdown suggests matching artists from the app's database. Each one is labelled the way MusicBrainz does it, with its disambiguation in parentheses, e.g. **Fuzz** (US garage rock band), so you can pick the right one when several artists share a name. Artists MusicBrainz doesn't disambiguate (like Alex Turner) have no label. Artists the database doesn't have are looked up on MusicBrainz; picking one of those (or an Explore search that finds nothing) is logged, and [banded-data](https://github.com/rahuljaisimha/banded-data) crawls those artists' concerts so they join the graph at its next rebuild. The same dropdown is on Discover, Similarity and the custom game in Play, and everywhere the artist you pick is the one used, even when others share its name.
 
 ## Six Degrees of Music (Game)
 
@@ -65,10 +65,10 @@ The app requires `public/graph.db.gz` (generated from MusicBrainz data, committe
 ```bash
 brew install zstd
 python3 scripts/process_mb_dump.py
-python3 scripts/add_concertdb_edges.py   # "opened for" links from concert-database
+python3 scripts/add_concertdb_edges.py   # "opened for" links from banded-data
 ```
 
-`process_mb_dump.py` starts from ~145 curated artists and, when a local concert-database ledger is present, from every artist with a concert in it, and keeps the download under 74 MB. `add_concertdb_edges.py` reads a local [concert-database](https://github.com/rahuljaisimha/concert-database) ledger (`~/concert-database/data/ledger.sqlite`, or `--ledger` / `$CONCERTDB_LEDGER`) and adds an "opened for" link for every opener/headliner pair it has confirmed. It can be re-run on its own to refresh those links without rebuilding the graph.
+`process_mb_dump.py` starts from ~145 curated artists and, when a local banded-data ledger is present, from every artist with a concert in it, and keeps the download under 74 MB. `add_concertdb_edges.py` reads a local [banded-data](https://github.com/rahuljaisimha/banded-data) ledger (`~/banded-data/data/ledger.sqlite`, or `--ledger` / `$CONCERTDB_LEDGER`) and adds an "opened for" link for every opener/headliner pair it has confirmed. It can be re-run on its own to refresh those links without rebuilding the graph.
 
 To see the debug log console, open the app with `?debug=1` or `?debug=true` in the URL, e.g. `http://localhost:5173/?debug=1` or `…/#/explore?debug=1`. It stays on while you navigate; reload without the flag to turn it off.
 
@@ -119,13 +119,13 @@ A fan of Ty Segall may discover:
 
 not because they share a genre tag, but because they share musicians, collaborators, venues, and history.
 
-MusicSceneMap models these connections.
+Banded models these connections.
 
 ---
 
 # Knowledge Graph
 
-The foundation of MusicSceneMap is a **heterogeneous knowledge graph** representing the relationships between the people, places, and organizations that create music communities.
+The foundation of Banded is a **heterogeneous knowledge graph** representing the relationships between the people, places, and organizations that create music communities.
 
 Unlike traditional recommendation systems that focus primarily on:
 
@@ -133,7 +133,7 @@ Unlike traditional recommendation systems that focus primarily on:
 * genre tags
 * popularity
 
-MusicSceneMap focuses on:
+Banded focuses on:
 
 * collaboration
 * touring history
@@ -207,7 +207,7 @@ The graph reveals that these artists are connected through a broader community r
 
 # Recommendation Engine
 
-MusicSceneMap uses graph relationships to generate recommendations.
+Banded uses graph relationships to generate recommendations.
 
 Potential signals include:
 
@@ -273,7 +273,7 @@ Concerts:
 
 # Travel Mode
 
-MusicSceneMap is designed for discovering cities through their music communities.
+Banded is designed for discovering cities through their music communities.
 
 Example:
 
@@ -283,7 +283,7 @@ Destination:
 Los Angeles
 ```
 
-Instead of showing every concert, MusicSceneMap identifies the scenes most relevant to the user.
+Instead of showing every concert, Banded identifies the scenes most relevant to the user.
 
 Example output:
 
@@ -386,7 +386,7 @@ Potential approaches:
 
 # Long-Term Vision
 
-MusicSceneMap aims to become a living map of global music communities.
+Banded aims to become a living map of global music communities.
 
 Not just:
 
@@ -399,21 +399,3 @@ but:
 The future of music discovery is not only finding artists.
 
 It is finding the people, places, and communities that connect them.
-
----
-
-# Future Name Exploration
-
-MusicSceneMap is a working repository name. As the project evolves, the product name may shift toward something more focused on the ideas of connection, discovery, and musical communities.
-
-| Name Direction   | Concept                                                                      | Potential Names                    |
-| ---------------- | ---------------------------------------------------------------------------- | ---------------------------------- |
-| Resonance        | The connections, influences, and collaborations that make music scenes exist | Resonant, Resonance, Resonance.fm  |
-| Discovery        | Finding overlooked artists and hidden communities                            | Deep Cut, Hidden Track, The B-Side |
-| Scene + Location | Mapping the places and communities around music                              | Vicinity, Viscenity, Obscenity     |
-| Connection       | The network of relationships between artists, venues, and scenes             | SceneMesh, Crosstalk, SceneMap     |
-
-The ideal name should capture the core idea:
-
-> A map of the relationships, communities, and hidden connections that make music scenes exist.
-

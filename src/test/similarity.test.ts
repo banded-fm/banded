@@ -203,7 +203,7 @@ describe("aggregateScore", () => {
 });
 
 /**
- * Concert ties from concert-database ("opened_for", opener -> headliner):
+ * Concert ties from banded-data ("opened_for", opener -> headliner):
  *   Flat Worms --opened_for--> Iguana Death Cult
  *   Flat Worms --opened_for--> Osees <--member_of-- John Dwyer
  *   Earth Tongue --opened_for--> Osees

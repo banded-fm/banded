@@ -28,7 +28,7 @@ interface GameState {
   revealed: boolean;
 }
 
-const GAME_STORAGE_KEY = "msm_current_game_v2";
+const GAME_STORAGE_KEY = "banded_current_game";
 const GAME_TTL_MS = 24 * 60 * 60 * 1000;
 
 interface StoredGame {

@@ -9,11 +9,11 @@ export default defineConfig(({ mode }) => {
   // Base path precedence:
   //   1. Explicit DEPLOY_BASE env var (manual override, any host).
   //   2. Cloudflare build → "/" (workers.dev / pages.dev serve at root).
-  //   3. GitHub Pages production default → "/MusicSceneMap/".
+  //   3. GitHub Pages production default → "/banded/".
   //   4. Local dev → "/".
   const base =
     process.env.DEPLOY_BASE ??
-    (isCloudflareBuild ? "/" : mode === "production" ? "/MusicSceneMap/" : "/");
+    (isCloudflareBuild ? "/" : mode === "production" ? "/banded/" : "/");
 
   // CDN URL for the graph DB. Cloudflare's static-assets-only Worker can't hold
   // env vars, so we can't rely on VITE_GRAPH_DB_URL being set there. Instead,
