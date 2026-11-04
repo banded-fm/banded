@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { local, server } = vi.hoisted(() => {
+const { local, server, musicBrainz } = vi.hoisted(() => {
   // The local graph: loaded, with Ty Segall only.
   const local = {
     loaded: true,
@@ -19,7 +19,17 @@ const { local, server } = vi.hoisted(() => {
         }
       : { found: false, artist: null, neighbors: [] };
   });
-  return { local, server };
+  // MusicBrainz: has IKAN HYU (in neither graph), with one member.
+  const musicBrainz = vi.fn(async (lookup: { name?: string; id?: string }) => {
+    const ikan = lookup.id === "ikan" || lookup.name?.toLowerCase() === "ikan hyu";
+    return ikan
+      ? {
+          node: { id: "ikan", name: "IKAN HYU", type: "group" },
+          neighbors: [{ node: { id: "m1", name: "Member One", type: "person" }, relType: "member_of", outgoing: false }],
+        }
+      : null;
+  });
+  return { local, server, musicBrainz };
 });
 
 vi.mock("../db/graphDb", () => ({
@@ -33,10 +43,16 @@ vi.mock("../db/graphDb", () => ({
 vi.mock("../api/supabase", () => ({
   getGraphNeighbors: (params: { mbid?: string; name?: string }) => server(params),
 }));
+vi.mock("../api/musicbrainzSubgraph", () => ({
+  musicBrainzSubgraph: (lookup: { name?: string; id?: string }) => musicBrainz(lookup),
+}));
 
 const { findArtist, findArtistById, getArtistNeighbors, inLocalGraph } = await import("../db/graphSource");
 
-beforeEach(() => server.mockClear());
+beforeEach(() => {
+  server.mockClear();
+  musicBrainz.mockClear();
+});
 
 describe("graphSource once the local graph has loaded", () => {
   it("answers from the local graph when it has the artist, without the server", async () => {
@@ -44,6 +60,7 @@ describe("graphSource once the local graph has loaded", () => {
     expect((await findArtist("ty segall"))?.id).toBe("ty");
     expect(await getArtistNeighbors("ty")).toHaveLength(1);
     expect(server).not.toHaveBeenCalled();
+    expect(musicBrainz).not.toHaveBeenCalled();
   });
 
   it("falls back to the server for an artist the local graph doesn't have (picked by ID)", async () => {
@@ -51,6 +68,20 @@ describe("graphSource once the local graph has loaded", () => {
     expect(inLocalGraph("zach")).toBe(false);
     const neighbors = await getArtistNeighbors("zach");
     expect(neighbors.map((n) => n.node.name)).toEqual(["Bruce Springsteen"]);
+    expect(musicBrainz).not.toHaveBeenCalled();
+  });
+
+  it("falls back to MusicBrainz for an artist neither graph has", async () => {
+    expect((await findArtistById("ikan"))?.name).toBe("IKAN HYU");
+    expect((await getArtistNeighbors("ikan")).map((n) => n.node.name)).toEqual(["Member One"]);
+    expect(musicBrainz).toHaveBeenCalledTimes(1);                 // the id lookup is shared
+    expect((await findArtist("Ikan Hyu", { partial: true }))?.id).toBe("ikan");
+  });
+
+  it("falls back to MusicBrainz when the server fails", async () => {
+    server.mockRejectedValueOnce(new Error("Supabase down"));
+    expect((await findArtistById("ikan-2"))).toBeNull();          // MusicBrainz doesn't know it either
+    expect(musicBrainz).toHaveBeenCalledWith({ id: "ikan-2" });
   });
 
   it("falls back to the server by name too, before the local partial match", async () => {
