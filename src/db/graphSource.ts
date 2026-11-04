@@ -6,7 +6,9 @@
  * any artist the local copy doesn't have (it's cut to fit the download; the
  * server holds every artist), they ask the Postgres graph-neighbors edge
  * function, with miss logging turned off: callers decide what counts as a miss
- * (Explore logs an artist the local graph lacks itself).
+ * (Explore logs an artist the local graph lacks itself). An artist Postgres
+ * doesn't have either (or a lookup that fails there) comes live from
+ * MusicBrainz, the way Similarity and Discover's tiered access does.
  *
  * Remote answers are an artist plus its 1-hop neighbors (artists only, no
  * albums), which is all Explore expansion needs. Results are memoized for the session.
@@ -29,6 +31,8 @@ interface RemoteEntry {
 
 const remoteByName = new Map<string, Promise<RemoteEntry | null>>();
 const remoteById = new Map<string, Promise<RemoteEntry | null>>();
+const musicBrainzByName = new Map<string, Promise<RemoteEntry | null>>();
+const musicBrainzById = new Map<string, Promise<RemoteEntry | null>>();
 
 /** Fetch from Postgres, sharing in-flight/finished requests. Failed requests aren't cached. */
 function fetchRemote(params: { name: string } | { mbid: string }): Promise<RemoteEntry | null> {
@@ -48,12 +52,37 @@ function fetchRemote(params: { name: string } | { mbid: string }): Promise<Remot
   return promise;
 }
 
+/** Fetch from MusicBrainz (paced, ~1 request a second), sharing requests. Failed requests aren't cached. */
+function fetchMusicBrainz(params: { name: string } | { mbid: string }): Promise<RemoteEntry | null> {
+  const [cache, key] = "name" in params ? [musicBrainzByName, params.name.toLowerCase()] : [musicBrainzById, params.mbid];
+  const cached = cache.get(key);
+  if (cached) return cached;
+
+  const promise = import("../api/musicbrainzSubgraph")
+    .then((m) => m.musicBrainzSubgraph("name" in params ? { name: params.name } : { id: params.mbid }))
+    .then((sg) => {
+      if (!sg) return null;
+      const entry: RemoteEntry = { node: sg.node, neighbors: sg.neighbors };
+      musicBrainzById.set(entry.node.id, Promise.resolve(entry));
+      return entry;
+    });
+  cache.set(key, promise);
+  promise.catch(() => cache.delete(key));
+  return promise;
+}
+
+/** The server's answer for an id, else MusicBrainz's; a failure at either counts as no answer. */
+async function remoteOrMusicBrainz(mbid: string): Promise<RemoteEntry | null> {
+  return (await fetchRemote({ mbid }).catch(() => null)) ?? (await fetchMusicBrainz({ mbid }).catch(() => null));
+}
+
 /**
  * Find an artist by name (case-insensitive exact match). The local graph first,
  * then the server: the local graph is cut to fit the download, so an artist it
  * doesn't have can still be on the server (which holds every artist). With
  * `partial`, the local graph's substring match is the last resort (the server
- * only does exact). Album nodes are never returned.
+ * only does exact), then MusicBrainz's best match for the name. Album nodes are
+ * never returned.
  */
 export async function findArtist(name: string, options: { partial?: boolean } = {}): Promise<NodeRecord | null> {
   if (isDbLoaded()) {
@@ -61,17 +90,21 @@ export async function findArtist(name: string, options: { partial?: boolean } = 
     if (node) return node.type === "album" ? null : node;
   }
   const remote = (await fetchRemote({ name }).catch(() => null))?.node ?? null;
-  if (remote || !isDbLoaded() || !options.partial) return remote;
-  return searchNodes(name, 10).find((n) => n.type !== "album") ?? null;
+  if (remote) return remote;
+  if (isDbLoaded() && options.partial) {
+    const partial = searchNodes(name, 10).find((n) => n.type !== "album");
+    if (partial) return partial;
+  }
+  return (await fetchMusicBrainz({ name }).catch(() => null))?.node ?? null;
 }
 
-/** Find an artist by MusicBrainz ID: the local graph, else the server. Album nodes are never returned. */
+/** Find an artist by MusicBrainz ID: the local graph, else the server, else MusicBrainz. Album nodes are never returned. */
 export async function findArtistById(id: string): Promise<NodeRecord | null> {
   if (isDbLoaded()) {
     const node = findNodeById(id);
     if (node) return node.type !== "album" ? node : null;
   }
-  return (await fetchRemote({ mbid: id }))?.node ?? null;
+  return (await remoteOrMusicBrainz(id))?.node ?? null;
 }
 
 /** Whether the local graph has loaded and has this artist. */
@@ -79,8 +112,8 @@ export function inLocalGraph(id: string): boolean {
   return isDbLoaded() && findNodeById(id) !== null;
 }
 
-/** An artist's 1-hop neighbors (both edge directions): from the local graph if it has the artist, else the server. */
+/** An artist's 1-hop neighbors (both edge directions): from the local graph if it has the artist, else the server, else MusicBrainz. */
 export async function getArtistNeighbors(id: string): Promise<Neighbor[]> {
   if (inLocalGraph(id)) return getNeighbors(id);
-  return (await fetchRemote({ mbid: id }))?.neighbors ?? [];
+  return (await remoteOrMusicBrainz(id))?.neighbors ?? [];
 }

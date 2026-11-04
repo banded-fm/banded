@@ -257,36 +257,8 @@ export async function buildTieredGraphAccess(): Promise<TieredGraphAccess> {
   };
 
   const fetchMusicBrainz = async ({ name, id }: ArtistLookup): Promise<Subgraph | null> => {
-    const mb = await import("../api/musicbrainz");
-    let mbid = id;
-    if (!mbid) {
-      const results = await mb.searchArtists(name, 5);
-      mbid = mb.pickBestMatch(name, results)?.id;
-    }
-    if (!mbid) return null;
-    const full = await mb.getArtistWithRelations(mbid);
-
-    const node: SimNode = {
-      id: full.id,
-      name: full.name,
-      type: full.type === "Group" ? "group" : "person",
-    };
-
-    // `outgoing`: this artist is the edge's source (the member / the supporting musician).
-    const neighbors: SimNeighbor[] = [];
-    const push = (a: { id: string; name: string; type?: string }, relType: string, outgoing: boolean) =>
-      neighbors.push({
-        node: { id: a.id, name: a.name, type: a.type === "Group" ? "group" : "person" },
-        relType,
-        outgoing,
-      });
-
-    for (const m of mb.extractBands(full)) push(m.artist, m.current ? "member_of" : "former_member_of", true);
-    for (const m of mb.extractMembers(full)) push(m.artist, m.current ? "member_of" : "former_member_of", false);
-    for (const s of mb.extractSupportedBands(full)) push(s.artist, "support_musician", true);
-    for (const s of mb.extractSupportMusicians(full)) push(s.artist, "support_musician", false);
-
-    return { node, neighbors };
+    const { musicBrainzSubgraph } = await import("../api/musicbrainzSubgraph");
+    return musicBrainzSubgraph({ name, id });
   };
 
   return new TieredGraphAccess(core, fetchPostgres, fetchMusicBrainz);
