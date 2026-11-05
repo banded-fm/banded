@@ -617,6 +617,40 @@ COLLAB_REL_TYPES = {
 }
 VARIOUS_ARTISTS = "89ad4ac3-39f7-470e-963a-56509c546377"
 
+# MusicBrainz's special purpose artists: placeholders credited when the real artist
+# is unknown or isn't an artist at all ([unknown], [anonymous], [traditional]...).
+# They are credited on thousands of records, so left in they would link artists
+# who have nothing in common (Mick Jagger -> [unknown] -> Jack White). Dropped with
+# all their relationships and credits. (MusicBrainz lists them by the comment
+# "Special Purpose Artist"; there is no flag in the dump.)
+SPECIAL_PURPOSE_ARTISTS = frozenset({
+    VARIOUS_ARTISTS,
+    "f731ccc4-e22a-43af-a747-64213329e088",  # [anonymous]
+    "33cf029c-63b0-41a0-9855-be2a3665fb3b",  # [data]
+    "314e1c25-dde7-4e4d-b2f4-0a7b9f7c56dc",  # [dialogue]
+    "eec63d3c-3b81-4ad4-b1e4-7c147d4d2b61",  # [no artist]
+    "9be7f096-97ec-4615-8957-8d40b5dcbc41",  # [traditional]
+    "125ec42a-7229-4250-afc5-e057484327fe",  # [unknown]
+    "66ea0139-149f-4a0c-8fbf-5ea9ec4a6e49",  # [Disney]
+    "a0ef7e1d-44ff-4039-9435-7d5fefdeecc9",  # [theatre]
+    "90068d37-bae7-4292-be4a-704c145bd616",  # [church chimes]
+    "80a8851f-444c-4539-892b-ad2a49292aa9",  # [language instruction]
+    "459a4aa6-b6b7-4c89-a42b-03acddbe1f80",  # [unknown animal]
+    "7e84f845-ac16-41fe-9ff8-df12eb32af55",  # MusicBrainz Test Artist
+})
+
+
+def drop_special_purpose_artists(artists: dict[int, dict], relationships: list) -> list:
+    """Remove the special purpose artists from `artists` (in place) and return the
+    relationships without them. Credits to or by them are dropped later because
+    the collaboration builders skip artist ids that aren't in `artists`."""
+    special = {aid for aid, d in artists.items() if d["gid"] in SPECIAL_PURPOSE_ARTISTS}
+    for aid in special:
+        del artists[aid]
+    kept = [r for r in relationships if r[0] not in special and r[1] not in special]
+    print(f"  Dropped {len(special)} special purpose artists and {len(relationships) - len(kept)} of their relationships")
+    return kept
+
 
 def build_collaborations(
     artist_recording_rels: list[tuple[int, int, str]],
@@ -947,6 +981,7 @@ def load_graph_inputs():
     artists = parse_artists(DATA_DIR, parse_areas(DATA_DIR))
     parse_artist_genres(DATA_DIR, artists, genre_names())
     relationships = parse_artist_relationships(DATA_DIR, links, link_types, aa_ids)
+    relationships = drop_special_purpose_artists(artists, relationships)
     credits = parse_artist_recording_relationships(DATA_DIR, links, link_types, ar_ids)
     recording_to_rg, release_groups = build_recording_to_release_group(DATA_DIR)
     credit_to_artist = parse_artist_credit_name(DATA_DIR)
