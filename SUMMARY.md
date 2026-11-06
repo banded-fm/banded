@@ -34,7 +34,7 @@ Data pipeline (offline, run manually):
         → SQLite database: nodes (persons, groups) + edges + graph_meta
         → If graph.db.gz > 74 MB: rebuilt with one hop fewer around banded-data's
           artists until it fits (Supabase keeps the full set)
-        → Output: public/graph.db.gz (~49MB, committed to repo; also uploaded to R2 for Cloudflare)
+        → Output: public/graph.db.gz (~72MB, committed to repo; also uploaded to R2 for Cloudflare)
         → seed_supabase.py writes the same artists and edges (uncut) to Postgres
     banded-data ledger (~/banded-data/data/ledger.sqlite, read-only)
         → scripts/add_concertdb_edges.py adds opener → headliner "opened_for" edges
@@ -212,6 +212,8 @@ src/
 │   │                       preloadDb() starts the background download; a failed load can be retried.
 │   │                       searchArtists() ranks name matches for the dropdown (uses the optional
 │   │                       disambiguation/area columns when the graph has them).
+│   ├── download.ts       — downloadWithResume: streams a large file, resuming with Range requests
+│   │                       when the connection drops (mobile data); used for graph.db.gz.
 │   ├── artistSuggest.ts  — Artist-dropdown suggestions: graph → Postgres search → MusicBrainz
 │   │                       fallback (findSuggestions, sources injectable for tests); builds the
 │   │                       "(disambiguation)" label (MusicBrainz's comment only).
@@ -388,7 +390,7 @@ CREATE TABLE graph_meta_added_nodes (value TEXT PRIMARY KEY); -- acts it added (
 
 ## Key design decisions
 
-- **SQLite in browser**: Precomputed graph loaded via sql.js WASM. ~49MB download (gzipped, kept under 74MB; loaded in the background), instant queries.
+- **SQLite in browser**: Precomputed graph loaded via sql.js WASM. ~72MB download (gzipped, kept under 74MB; loaded in the background, and resumed with Range requests when a mobile connection drops: `db/download.ts`), instant queries.
 - **Lazy graph loading**: Pages never wait for the graph download. It starts in the background after the first render (`preloadDb()` in `main.tsx`), and until it finishes `graphSource.ts` and the tiered access answer from Postgres `graph-neighbors`, which holds every artist. After it finishes they still ask Postgres for an artist the browser graph doesn't have (it's cut to fit the download), so Explore and Discover find e.g. Zach Bryan whether or not the download has finished. An artist Postgres doesn't have either comes live from MusicBrainz (`api/musicbrainzSubgraph.ts`, shared with the tiered access), so anything the search dropdown offers can be explored. Those requests pass `log=0`, so nothing is added to `search_misses` while the graph is downloading. Postgres only returns 1-hop neighborhoods, so Similarity scores computed before the download finishes can be less precise. Play renders immediately too: today's puzzle, a random puzzle and any listed puzzle (including a shared one) show their start, end and par at once from puzzles.json, a saved game comes back in full, and a shared custom game shows its start and end when they are curated artists; only the list of moves (and a custom game's path) waits for the graph.
 - **Gzip auto-detection**: Checks first 2 bytes for gzip magic number (1f 8b). Decompresses manually if browser didn't (GitHub Pages). Skips if Vite already decompressed (Content-Encoding: gzip).
 - **Game restricted to band relationships**: BFS and valid moves only use member_of, former_member_of, support_musician. Collaborations and opened_for are not used in gameplay (too loose a tie for the puzzle).

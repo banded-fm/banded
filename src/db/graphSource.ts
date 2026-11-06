@@ -1,7 +1,7 @@
 /**
  * Async graph lookups that work before the browser graph DB has loaded.
  *
- * The ~48MB graph.db.gz downloads in the background (preloadDb in main.tsx).
+ * The ~72MB graph.db.gz downloads in the background (preloadDb in main.tsx).
  * Once it's loaded, these read the local sql.js copy first. Until then, and for
  * any artist the local copy doesn't have (it's cut to fit the download; the
  * server holds every artist), they ask the Postgres graph-neighbors edge
