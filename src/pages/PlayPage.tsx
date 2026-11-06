@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { GAME_ARTISTS, type GameArtist } from "../game/artists";
-import { getDb, isDbLoaded, findNodeByName, bfsShortestPath, findNodeById, getNeighbors } from "../db/graphDb";
+import { getDb, isDbLoaded, findNodeByName, bfsShortestPath, findNodeById } from "../db/graphDb";
+import { walkGame, walkKey, type Walk } from "../game/walk";
 import { dailyPuzzle, findPuzzle, localDate, randomPuzzle, type Puzzle } from "../game/puzzles";
 import { DebugConsole } from "../components/DebugConsole";
 import { ArtistAutocomplete } from "../components/ArtistAutocomplete";
@@ -11,7 +12,8 @@ import { debugLog } from "../debug/DebugLog";
  * "loading": the game isn't known yet (a random game needs the graph to find a
  * path). Its start/end may already be known (a shared link to curated artists),
  * and show while the rest loads. "playing" can start before the graph has
- * downloaded (a saved game): only the list of moves waits for it.
+ * downloaded (a listed puzzle or a saved game): the moves come from the server
+ * until it has (game/walk.ts).
  */
 interface GameState {
   status: "loading" | "error" | "playing";
@@ -291,34 +293,36 @@ export function PlayPage() {
   const [customLoading, setCustomLoading] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
 
-  // Compute current node: last guess resolved to ID, or start node
-  const currentNodeId = (() => {
-    if (state.status !== "playing") return null;
-    if (state.guesses.length === 0) return state.startId!;
-    const lastGuess = state.guesses[state.guesses.length - 1]!;
-    const node = findNodeByName(lastGuess);
-    return node?.id ?? null;
-  })();
+  // Where the game has got to and the moves from there: from the server until the
+  // graph has downloaded, then from the graph (worked out again when it arrives).
+  const key = state.status === "playing" ? walkKey(state.startId!, state.guesses) : null;
+  const [walk, setWalk] = useState<(Walk & { failed?: boolean }) | null>(null);
+  const [walkRetry, setWalkRetry] = useState(0);
+  useEffect(() => {
+    if (state.status !== "playing" || !key) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    walkGame(state.startId!, state.guesses)
+      // No moves at all before the graph has loaded means the server couldn't be reached: try again shortly.
+      .then((w): Walk & { failed?: boolean } => w.neighbors.length === 0 && !isDbLoaded() ? { ...w, failed: true } : w)
+      .catch((): Walk & { failed?: boolean } => ({ key, ids: [], neighbors: [], failed: true }))
+      .then((w) => {
+        if (cancelled) return;
+        setWalk(w);
+        if (w.failed) timer = setTimeout(() => setWalkRetry((n) => n + 1), 5000);
+      });
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [key, dbReady, walkRetry]); // eslint-disable-line react-hooks/exhaustive-deps
+  const current = walk && walk.key === key && !walk.failed ? walk : null;
+  const movesFailed = !!walk && walk.key === key && !!walk.failed;
+  const visitedIds = new Set(current?.ids ?? []);
 
-  // Build set of already-visited node IDs (start + all guesses)
-  const visitedIds = (() => {
-    if (state.status !== "playing") return new Set<string>();
-    const ids = new Set<string>();
-    ids.add(state.startId!);
-    for (const guess of state.guesses) {
-      const node = findNodeByName(guess);
-      if (node) ids.add(node.id);
-    }
-    return ids;
-  })();
-
-  // Get valid next moves (neighbors of current node, excluding already-visited and compilations)
+  // Valid next moves: neighbors of the current artist, excluding ones already visited
   const validMoves = (() => {
-    if (!currentNodeId) return [];
-    const neighbors = getNeighbors(currentNodeId);
-    return neighbors
+    if (!current) return [];
+    return current.neighbors
       .filter((n) => !visitedIds.has(n.node.id))
-      .map((n) => ({ id: n.node.id, name: n.node.name, type: n.node.type, relType: n.relType, outgoing: n.outgoing }))
+      .map((n) => ({ id: n.node.id, name: n.node.name, type: n.node.type, relType: n.relType, outgoing: n.outgoing ?? false }))
       // one entry per artist, labelled with its closest kind of connection
       .sort((a, b) => relTypePriority(a.relType) - relTypePriority(b.relType))
       .filter((n, i, arr) => arr.findIndex((x) => x.id === n.id) === i)
@@ -407,7 +411,8 @@ export function PlayPage() {
       try {
         await getDb();
       } catch (e) {
-        if (!cancelled) setState({ status: "error", error: e instanceof Error ? e.message : "Failed to load database", guesses: [], revealed: false });
+        // A game already playing carries on with the server's moves.
+        if (!cancelled) setState((s) => s.status === "playing" ? s : { status: "error", error: e instanceof Error ? e.message : "Failed to load database", guesses: [], revealed: false });
         return;
       }
       if (cancelled) return;
@@ -496,6 +501,10 @@ export function PlayPage() {
     });
   };
 
+  // Names for the revealed path: a listed puzzle has them in puzzles.json, so they show before the graph loads.
+  const listedPuzzle = state.startId && state.endId ? findPuzzle(state.startId, state.endId) : undefined;
+  const pathNodes = new Map((listedPuzzle?.path ?? []).map((a) => [a.id, a] as const));
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") handleGuess();
   };
@@ -538,7 +547,7 @@ export function PlayPage() {
           </div>
         )}
 
-        {(state.status === "loading" || (state.status === "playing" && !dbReady)) && (
+        {state.status === "loading" && (
           <div style={styles.inputSection}>
             <div className="moves-list" style={styles.movesList} aria-hidden="true">
               {[0, 1, 2, 3].map((i) => (
@@ -557,7 +566,7 @@ export function PlayPage() {
 
         {state.status !== "error" && (
           <>
-            {state.status === "playing" && dbReady && (<>
+            {state.status === "playing" && (<>
             {!state.revealed && (
               <div style={styles.inputSection}>
                 <div style={styles.guessList}>
@@ -589,8 +598,15 @@ export function PlayPage() {
                     aria-label="Filter connections"
                   />
                 </div>
-                <div className="moves-list" style={styles.movesList}>
-                  {filteredMoves.length > 0 ? (
+                <div className="moves-list" style={styles.movesList} aria-busy={!current}>
+                  {!current ? (
+                    // The path so far, Undo and the filter stay put while the moves load.
+                    [0, 1, 2, 3].map((i) => (
+                      <div key={i} className="move-item" style={styles.moveItem} aria-hidden="true">
+                        <span className="skeleton skeleton-move" />
+                      </div>
+                    ))
+                  ) : filteredMoves.length > 0 ? (
                     filteredMoves.map((m) => (
                       <button
                         key={m.id}
@@ -607,6 +623,11 @@ export function PlayPage() {
                     <p style={styles.noMoves}>No matching connections</p>
                   )}
                 </div>
+                {!current && (
+                  <p style={styles.hint}>
+                    {movesFailed ? "Couldn't load the connections. Trying again…" : "Loading connections…"}
+                  </p>
+                )}
                 <button onClick={handleReveal} style={styles.revealBtn}>
                   {state.listed ? "Reveal Par Path" : "Reveal Shortest Path"}
                 </button>
@@ -620,7 +641,7 @@ export function PlayPage() {
                 </p>
                 <div style={styles.chainDisplay}>
                   {state.shortestPath!.map((nodeId, i) => {
-                    const node = findNodeById(nodeId);
+                    const node = pathNodes.get(nodeId) ?? findNodeById(nodeId);
                     return (
                       <span key={nodeId} style={styles.chainItem}>
                         <span style={node?.type === "person" ? styles.personChip : node?.type === "group" ? styles.bandChip : styles.albumChip}>
