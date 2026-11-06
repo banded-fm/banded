@@ -2,12 +2,10 @@ import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { GAME_ARTISTS, type GameArtist } from "../game/artists";
 import { getDb, isDbLoaded, findNodeByName, bfsShortestPath, findNodeById, getNeighbors } from "../db/graphDb";
+import { dailyPuzzle, findPuzzle, localDate, randomPuzzle, type Puzzle } from "../game/puzzles";
 import { DebugConsole } from "../components/DebugConsole";
 import { ArtistAutocomplete } from "../components/ArtistAutocomplete";
 import { debugLog } from "../debug/DebugLog";
-
-/** Only these relationship types are used in the game */
-const GAME_REL_TYPES = new Set(["member_of", "former_member_of", "support_musician"]);
 
 /**
  * "loading": the game isn't known yet (a random game needs the graph to find a
@@ -24,6 +22,10 @@ interface GameState {
   endId?: string;
   shortestPath?: string[];
   par?: number;
+  /** A puzzle from the list (src/game/puzzles.json): par is its closest connection through known artists. */
+  listed?: boolean;
+  /** The daily puzzle's date (YYYY-MM-DD), when this is one. */
+  daily?: string;
   guesses: string[];
   revealed: boolean;
 }
@@ -38,6 +40,8 @@ interface StoredGame {
   endId: string;
   shortestPath: string[];
   par: number;
+  listed?: boolean;
+  daily?: string;
   guesses: string[];
   revealed: boolean;
   timestamp: number;
@@ -78,16 +82,43 @@ function playing(game: StoredGame): GameState {
     endId: game.endId,
     shortestPath: game.shortestPath,
     par: game.par,
+    listed: game.listed,
+    daily: game.daily,
     guesses: game.guesses,
     revealed: game.revealed,
   };
 }
 
+/** A game of a listed puzzle (the daily one when `daily` is its date). Needs no graph. */
+function gameFromPuzzle(p: Puzzle, daily?: string): StoredGame {
+  return {
+    startArtist: { name: p.start.name, type: p.start.type, mbid: p.start.id },
+    endArtist: { name: p.end.name, type: p.end.type, mbid: p.end.id },
+    startId: p.start.id,
+    endId: p.end.id,
+    shortestPath: p.path.map((a) => a.id),
+    par: p.par,
+    listed: true,
+    ...(daily ? { daily } : {}),
+    guesses: [],
+    revealed: false,
+    timestamp: Date.now(),
+  };
+}
+
+/** Today's puzzle: the saved game if it is today's, else a fresh one. */
+function todaysGame(): StoredGame {
+  const today = localDate();
+  const saved = loadGame();
+  return saved && saved.daily === today ? saved : gameFromPuzzle(dailyPuzzle(today), today);
+}
+
 const curatedById = (mbid: string) => GAME_ARTISTS.find((a) => a.mbid === mbid);
 
 /**
- * What can be shown before the graph has downloaded: a saved game in full, or a
- * shared link's start and end (their names when they are curated artists).
+ * What can be shown before the graph has downloaded: today's puzzle (or a saved
+ * game of it), a listed puzzle from a shared link, a saved game, or a shared
+ * link's start and end (their names when they are curated artists).
  */
 function initialState(params: URLSearchParams): GameState {
   const start = params.get("start");
@@ -95,79 +126,32 @@ function initialState(params: URLSearchParams): GameState {
   if (start && end) {
     const saved = loadGame();
     if (saved && saved.startId === start && saved.endId === end) return playing(saved);   // reload mid-game
+    const listed = findPuzzle(start, end);
+    if (listed) {
+      const game = gameFromPuzzle(listed);
+      if (listed.start.id !== start) Object.assign(game, flipped(game));   // shared the other way round
+      return playing(game);
+    }
     return { status: "loading", startId: start, endId: end, startArtist: curatedById(start),
              endArtist: curatedById(end), guesses: [], revealed: false };
   }
-  const saved = loadGame();
-  return saved ? playing(saved) : { status: "loading", guesses: [], revealed: false };
+  return playing(todaysGame());
 }
 
-function pickRandom<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)]!;
+/** The same game from the other end. */
+function flipped(g: StoredGame): Partial<StoredGame> {
+  return { startArtist: g.endArtist, endArtist: g.startArtist, startId: g.endId, endId: g.startId,
+           shortestPath: [...g.shortestPath].reverse() };
 }
 
-/**
- * Generate a game: pick two artists of the same type, find shortest path,
- * re-roll if distance < 3.
- */
-async function generateGame(): Promise<StoredGame | null> {
-  await getDb();
-
-  for (let attempt = 0; attempt < 20; attempt++) {
-    // Pick a type (person or group)
-    const type = Math.random() < 0.5 ? "person" : "group";
-    const pool = GAME_ARTISTS.filter((a) => a.type === type);
-
-    const startArtist = pickRandom(pool);
-    let endArtist = pickRandom(pool);
-    while (endArtist.mbid === startArtist.mbid) {
-      endArtist = pickRandom(pool);
-    }
-
-    // Resolve by MusicBrainz ID (names can be ambiguous or out of date)
-    const startNode = findNodeById(startArtist.mbid);
-    const endNode = findNodeById(endArtist.mbid);
-
-    if (!startNode || !endNode) {
-      debugLog.log(`Game: could not resolve "${startArtist.name}" or "${endArtist.name}" in DB`);
-      continue;
-    }
-
-    // Find shortest path
-    debugLog.log(`Game: BFS from "${startArtist.name}" to "${endArtist.name}"...`);
-    const path = bfsShortestPath(startNode.id, endNode.id, 10, GAME_REL_TYPES);
-
-    if (!path) {
-      debugLog.log(`Game: no path found, retrying`);
-      continue;
-    }
-
-    if (path.length < 4) {
-      // Distance < 3 hops (path includes start+end, so length 4 = 3 hops)
-      debugLog.log(`Game: path too short (${path.length - 1} hops), retrying`);
-      continue;
-    }
-
-    const par = path.length; // shortest path length = number of nodes. Par = shortest + 1 step for the player
-    debugLog.log(`Game: found path of length ${path.length - 1} hops, par = ${par}`);
-
-    const stored: StoredGame = {
-      startArtist,
-      endArtist,
-      startId: startNode.id,
-      endId: endNode.id,
-      shortestPath: path,
-      par,
-      guesses: [],
-      revealed: false,
-      timestamp: Date.now(),
-    };
-    saveGame(stored);
-    return stored;
-  }
-
-  return null;
+/** A new random game: a listed puzzle other than the current one. */
+function generateGame(current?: { startId?: string; endId?: string }): StoredGame {
+  const except = current?.startId && current.endId ? findPuzzle(current.startId, current.endId) : undefined;
+  const game = gameFromPuzzle(randomPuzzle(except));
+  saveGame(game);
+  return game;
 }
+
 /**
  * Build a game from two resolved nodes. Validates path existence.
  * Note: start and end do NOT need to be the same type (a person can be
@@ -182,7 +166,17 @@ function buildGameFromNodes(
     return { error: "Start and end must be different." };
   }
 
-  const path = bfsShortestPath(startNode.id, endNode.id, 12, GAME_REL_TYPES);
+  // A listed puzzle keeps its par (closest connection through known artists)
+  const listed = findPuzzle(startNode.id, endNode.id);
+  if (listed) {
+    const game = gameFromPuzzle(listed);
+    if (listed.start.id !== startNode.id) Object.assign(game, flipped(game));
+    saveGame(game);
+    return { game };
+  }
+
+  // Every connection counts, as in Explore; par is the shortest path's hops
+  const path = bfsShortestPath(startNode.id, endNode.id, 12);
   if (!path) {
     return { error: `No path exists between "${startNode.name}" and "${endNode.name}".` };
   }
@@ -195,7 +189,7 @@ function buildGameFromNodes(
     startId: startNode.id,
     endId: endNode.id,
     shortestPath: path,
-    par: path.length,
+    par: path.length - 1,
     guesses: [],
     revealed: false,
     timestamp: Date.now(),
@@ -252,34 +246,32 @@ async function generateGameFromIds(
   return buildGameFromNodes(startNode, endNode);
 }
 
+/** Order of a move's connection in the list: band ties first, then records and shows. */
 function relTypePriority(relType: string): number {
   switch (relType) {
     case "member_of": return 0;
     case "former_member_of": return 1;
-    case "album_by": return 2;
-    case "support_musician": return 3;
-    case "vocal": return 4;
-    case "instrument": return 5;
-    case "producer": return 6;
-    case "mix": return 7;
-    case "engineer": return 8;
-    case "recording": return 9;
-    default: return 10;
+    case "support_musician": return 2;
+    case "collaborated_with": return 3;
+    case "produced_for": return 4;
+    case "opened_for": return 5;
+    default: return 6;
   }
 }
 
-function formatRelType(relType: string, nodeType: string): string {
+/**
+ * How a move is connected to the current artist. `outgoing`: the current
+ * artist is the edge's source (the member, the credited musician, the
+ * producer, the opener).
+ */
+function formatRelType(relType: string, nodeType: string, outgoing: boolean): string {
   switch (relType) {
     case "member_of": return nodeType === "group" ? "group" : "member";
     case "former_member_of": return nodeType === "group" ? "former group" : "former member";
     case "support_musician": return nodeType === "group" ? "supported" : "support musician";
-    case "producer": return "producer";
-    case "vocal": return "vocals";
-    case "instrument": return "instrument";
-    case "mix": return "mix";
-    case "engineer": return "engineer";
-    case "recording": return "recording";
-    case "album_by": return "album by";
+    case "collaborated_with": return "collaborator";
+    case "produced_for": return outgoing ? "produced for" : "producer";
+    case "opened_for": return outgoing ? "headliner" : "opener";
     default: return relType.replace(/_/g, " ");
   }
 }
@@ -326,9 +318,10 @@ export function PlayPage() {
     const neighbors = getNeighbors(currentNodeId);
     return neighbors
       .filter((n) => !visitedIds.has(n.node.id))
-      .filter((n) => GAME_REL_TYPES.has(n.relType))
-      .map((n) => ({ id: n.node.id, name: n.node.name, type: n.node.type, relType: n.relType }))
-      .filter((n, i, arr) => arr.findIndex((x) => x.id === n.id) === i) // dedupe
+      .map((n) => ({ id: n.node.id, name: n.node.name, type: n.node.type, relType: n.relType, outgoing: n.outgoing }))
+      // one entry per artist, labelled with its closest kind of connection
+      .sort((a, b) => relTypePriority(a.relType) - relTypePriority(b.relType))
+      .filter((n, i, arr) => arr.findIndex((x) => x.id === n.id) === i)
       .sort((a, b) => {
         // Sort by relationship priority first, then alphabetically
         const priority = relTypePriority(a.relType) - relTypePriority(b.relType);
@@ -342,16 +335,19 @@ export function PlayPage() {
     ? validMoves.filter((m) => m.name.toLowerCase().includes(input.toLowerCase()))
     : validMoves;
 
-  const startNewGame = useCallback(async () => {
-    clearGame();
-    setState({ status: "loading", guesses: [], revealed: false });
-    const game = await generateGame();
-    if (game) {
-      setSearchParams({ start: game.startId, end: game.endId }, { replace: true });
-      setState(playing(game));
-    } else {
-      setState({ status: "error", error: "Could not generate a game. Is graph.db loaded?", guesses: [], revealed: false });
-    }
+  const startNewGame = useCallback(() => {
+    const game = generateGame(state);
+    setInput("");
+    setSearchParams({ start: game.startId, end: game.endId }, { replace: true });
+    setState(playing(game));
+  }, [setSearchParams, state]);
+
+  const playToday = useCallback(() => {
+    const game = todaysGame();
+    saveGame(game);
+    setInput("");
+    setSearchParams({}, { replace: true });
+    setState(playing(game));
   }, [setSearchParams]);
 
   const handleStartCustomGame = useCallback(async () => {
@@ -428,20 +424,11 @@ export function PlayPage() {
           setState(playing(result.game));
           return;
         }
-        // If the shared game is invalid, fall through to a random game
+        // An invalid shared game falls back to today's puzzle
         debugLog.log(`Shared game invalid: ${result.error}`);
-        setState({ status: "loading", guesses: [], revealed: false });
       }
-
-      // 2. A new random game
-      const game = await generateGame();
-      if (cancelled) return;
-      if (game) {
-        setSearchParams({ start: game.startId, end: game.endId }, { replace: true });
-        setState(playing(game));
-      } else {
-        setState({ status: "error", error: "Could not generate a game.", guesses: [], revealed: false });
-      }
+      setSearchParams({}, { replace: true });
+      setState(playing(todaysGame()));
     })();
     return () => { cancelled = true; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -461,6 +448,8 @@ export function PlayPage() {
       endId: state.endId!,
       shortestPath: state.shortestPath!,
       par: state.par!,
+      listed: state.listed,
+      daily: state.daily,
       guesses: newGuesses,
       revealed: state.revealed,
       timestamp: Date.now(),
@@ -480,6 +469,8 @@ export function PlayPage() {
       endId: state.endId!,
       shortestPath: state.shortestPath!,
       par: state.par!,
+      listed: state.listed,
+      daily: state.daily,
       guesses: newGuesses,
       revealed: state.revealed,
       timestamp: Date.now(),
@@ -497,6 +488,8 @@ export function PlayPage() {
       endId: state.endId!,
       shortestPath: state.shortestPath!,
       par: state.par!,
+      listed: state.listed,
+      daily: state.daily,
       guesses: state.guesses,
       revealed: true,
       timestamp: Date.now(),
@@ -514,14 +507,14 @@ export function PlayPage() {
         <div style={styles.header}>
           <h1 className="page-title" style={styles.title}>Six Degrees of Music</h1>
           <p style={styles.subtitle}>
-            Connect these two {state.startArtist?.type === "group" ? "groups" : "artists"} through the shortest path.
+            {state.daily ? "Today's puzzle: c" : "C"}onnect these two {state.startArtist?.type === "group" ? "groups" : "artists"} in as few steps as you can.
           </p>
         </div>
 
         {state.status === "error" && (
           <div style={styles.card}>
             <p style={styles.errorText}>{state.error}</p>
-            <button onClick={startNewGame} style={styles.newGameBtn}>Try Again</button>
+            <button onClick={playToday} style={styles.newGameBtn}>Today's Puzzle</button>
           </div>
         )}
 
@@ -607,7 +600,7 @@ export function PlayPage() {
                         style={styles.moveItem}
                       >
                         <span style={styles.moveName}>{m.name}</span>
-                        <span style={styles.moveRel}>{formatRelType(m.relType, m.type)}</span>
+                        <span style={styles.moveRel}>{formatRelType(m.relType, m.type, m.outgoing)}</span>
                       </button>
                     ))
                   ) : (
@@ -615,14 +608,16 @@ export function PlayPage() {
                   )}
                 </div>
                 <button onClick={handleReveal} style={styles.revealBtn}>
-                  Reveal Shortest Path
+                  {state.listed ? "Reveal Par Path" : "Reveal Shortest Path"}
                 </button>
               </div>
             )}
 
             {state.revealed && (
               <div style={styles.revealSection}>
-                <p style={styles.revealLabel}>Shortest path ({state.shortestPath!.length - 1} hops):</p>
+                <p style={styles.revealLabel}>
+                  {state.listed ? "Par path through well-known artists" : "Shortest path"} ({state.shortestPath!.length - 1} hops):
+                </p>
                 <div style={styles.chainDisplay}>
                   {state.shortestPath!.map((nodeId, i) => {
                     const node = findNodeById(nodeId);
@@ -638,7 +633,7 @@ export function PlayPage() {
                 </div>
                 {state.guesses.length > 0 && (
                   <div style={styles.guessList}>
-                    <p style={styles.guessLabel}>Your path ({state.guesses.length + 2} steps):</p>
+                    <p style={styles.guessLabel}>Your path ({state.guesses.length + 1} hops):</p>
                     <span style={styles.guessChip}>{state.startArtist!.name}</span>
                     <span style={styles.chainArrow}>→</span>
                     {state.guesses.map((g, i) => (
@@ -656,8 +651,13 @@ export function PlayPage() {
             </>)}
 
             <div className="game-buttons" style={styles.gameButtons}>
-              <button onClick={startNewGame} disabled={state.status === "loading"} style={styles.newGameBtn}>
-                New Game
+              {!state.daily && (
+                <button onClick={playToday} style={styles.newGameBtn}>
+                  Today's Puzzle
+                </button>
+              )}
+              <button onClick={startNewGame} disabled={state.status === "loading"} style={state.daily ? styles.newGameBtn : styles.customBtn}>
+                Random Puzzle
               </button>
               <button onClick={() => { setShowCustom((s) => !s); setCustomError(null); }} style={styles.customBtn}>
                 Custom Game

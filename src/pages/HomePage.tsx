@@ -4,7 +4,7 @@ import { SiteFooter } from "../components/SiteFooter";
 /** The pages the home screen links to, in nav order. */
 export const HOME_LINKS = [
   { to: "/explore", label: "Explore", description: "Explore the graph. Search artists and walk through their network." },
-  { to: "/play", label: "Play", description: "Six Degrees of Music: connect two artists through the bands they share, in as few moves as you can." },
+  { to: "/play", label: "Play", description: "Six Degrees of Music: a daily puzzle. Connect two artists through the people and bands between them, in as few moves as you can." },
   { to: "/discover", label: "Discover", description: "Find upcoming concerts in a city, ranked by how well they fit the artists you like." },
   { to: "/similarity", label: "Similarity", description: "Score how close any artist is to a list of artists you love, and see the connections behind the score." },
   { to: "/about", label: "About", description: "How it works and where the data comes from." },
