@@ -1,4 +1,5 @@
 import initSqlJs, { type SqlJsConfig } from "sql.js";
+import { NotTheFile, downloadWithResume } from "./download";
 
 // Use the proper type from our declaration
 interface DB {
@@ -51,24 +52,20 @@ export async function getDb(): Promise<DB> {
     const cdnUrl = import.meta.env.VITE_GRAPH_DB_URL || __GRAPH_DB_CDN_URL__;
     const candidates = [localUrl, cdnUrl].filter((u): u is string => Boolean(u));
 
-    let buffer: ArrayBuffer | null = null;
+    // A dropped connection is resumed rather than failing the whole download (see download.ts).
+    let bytes: Uint8Array | null = null;
     const errors: string[] = [];
     for (const url of candidates) {
       try {
-        const response = await fetch(url);
-        if (!response.ok || response.headers.get("content-type") === "text/html") {
-          errors.push(`${url} → ${response.status} ${response.headers.get("content-type") ?? ""}`.trim());
-          continue;
-        }
-        buffer = await response.arrayBuffer();
+        bytes = await downloadWithResume(url);
         break;
       } catch (e) {
-        // Network/CORS failure — try the next candidate.
-        errors.push(`${url} → ${e instanceof Error ? e.message : "fetch failed"}`);
+        // Not served here, or a network/CORS failure that retrying didn't fix — try the next candidate.
+        errors.push(e instanceof NotTheFile ? e.message : `${url} → ${e instanceof Error ? e.message : "fetch failed"}`);
       }
     }
 
-    if (!buffer) {
+    if (!bytes) {
       throw new Error(
         "Graph database could not be loaded. Run 'python3 scripts/process_mb_dump.py' to generate " +
         "public/graph.db.gz, or set VITE_GRAPH_DB_URL to a reachable CDN URL. Tried: " +
@@ -79,17 +76,13 @@ export async function getDb(): Promise<DB> {
     // Check if we need to manually decompress:
     // If Content-Encoding: gzip was set, browser already decompressed it.
     // If not (e.g., GitHub Pages / R2 raw bytes), detect gzip via magic number.
-    const header = new Uint8Array(buffer, 0, 2);
-    if (header[0] === 0x1f && header[1] === 0x8b) {
-      // Gzip magic number detected — need manual decompression
-      const ds = new DecompressionStream("gzip");
-      const writer = ds.writable.getWriter();
-      writer.write(new Uint8Array(buffer));
-      writer.close();
-      buffer = await new Response(ds.readable).arrayBuffer();
+    if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
+      // Gzip magic number detected — need manual decompression. Only the
+      // decompressed copy is kept, so a phone doesn't hold both at once.
+      bytes = new Uint8Array(await new Response(new Blob([bytes as BlobPart]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer());
     }
 
-    const instance = new SQL.Database(new Uint8Array(buffer));
+    const instance = new SQL.Database(bytes);
     db = instance as unknown as DB;
     return db;
   })();

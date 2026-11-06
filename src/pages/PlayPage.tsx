@@ -279,7 +279,7 @@ function formatRelType(relType: string, nodeType: string, outgoing: boolean): st
 export function PlayPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [state, setState] = useState<GameState>(() => initialState(searchParams));
-  // The graph (~47 MB) downloads in the background; the page doesn't wait for it.
+  // The graph (~72 MB) downloads in the background; the page doesn't wait for it.
   const [dbReady, setDbReady] = useState(isDbLoaded);
   const [input, setInput] = useState("");
   const [showCustom, setShowCustom] = useState(false);
@@ -550,7 +550,7 @@ export function PlayPage() {
             <p style={styles.hint}>
               {dbReady
                 ? "Finding a path…"
-                : "Loading the music graph (~47 MB, downloaded once in the background)…"}
+                : "Loading the music graph (~72 MB, downloaded once in the background)…"}
             </p>
           </div>
         )}
