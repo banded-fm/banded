@@ -41,7 +41,7 @@ As you type, a dropdown suggests matching artists from the app's database. Each 
 
 ## Six Degrees of Music (Game)
 
-A game that gives you two musicians (or two groups) and challenges you to find the path connecting them through group memberships and supporting roles. Navigate by selecting from valid connections at each step. The app computes the shortest path and shows you a "par" to beat. The page opens straight away: a game in progress comes back at once, and a new game's artists fill in as soon as the music graph has downloaded.
+A daily puzzle: two musicians (or two groups) to connect through any connection Banded knows (band memberships, supporting roles, playing or singing on each other's records, producing them, opening for each other). Par is the closest connection through well-known artists (10+ Wikipedia editions); a shorter route beats it. The puzzles are a committed list, `src/game/puzzles.json`, one per day from `DAILY_START`; `src/game/PUZZLES.md` explains how they were chosen. There are also random puzzles from the list, and custom games between any two artists (par = shortest path). The page opens straight away with today's puzzle; the list of moves fills in once the music graph has downloaded.
 
 ## Discover
 

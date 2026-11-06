@@ -20,15 +20,17 @@ export function AboutPage() {
 
         <h2 style={styles.heading}>Six Degrees of Music</h2>
         <p style={styles.paragraph}>
-          A game that gives you two musicians (or two groups) and challenges you to find a path
-          connecting them through group memberships and supporting roles. The app computes the
-          shortest possible path and shows you a "par" to beat. Navigate by selecting from the
-          list of valid connections at each step.
+          A daily puzzle: two musicians (or two groups) to connect through any of the connections
+          the rest of Banded uses: band memberships, supporting roles, playing or singing on each
+          other's records, producing them, and opening for each other's shows. Par is the closest
+          connection through well-known artists; find a shorter route and you beat it. Navigate by
+          selecting from the list of connections at each step.
         </p>
         <p style={styles.paragraph}>
-          You can start a random game, or create a custom game between any two connected artists
-          or groups (they don't have to be the same type). Every game has a shareable link —
-          hit Share to copy a URL that drops a friend into the exact same puzzle.
+          Everyone gets the same puzzle each day. You can also play a random puzzle from the list,
+          or create a custom game between any two connected artists or groups (par is then the
+          shortest path). Every game has a shareable link: hit Share to copy a URL that drops a
+          friend into the exact same puzzle.
         </p>
 
         <h2 style={styles.heading}>Discover</h2>
