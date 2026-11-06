@@ -41,7 +41,7 @@ As you type, a dropdown suggests matching artists from the app's database. Each 
 
 ## Six Degrees of Music (Game)
 
-A daily puzzle: two musicians (or two groups) to connect through any connection Banded knows (band memberships, supporting roles, playing or singing on each other's records, producing them, opening for each other). Par is the closest connection through well-known artists (10+ Wikipedia editions); a shorter route beats it. The puzzles are a committed list, `src/game/puzzles.json`, one per day from `DAILY_START`; `src/game/PUZZLES.md` explains how they were chosen. There are also random puzzles from the list, and custom games between any two artists (par = shortest path). The page opens straight away with today's puzzle; the list of moves fills in once the music graph has downloaded.
+A daily puzzle: two musicians (or two groups) to connect through any connection Banded knows (band memberships, supporting roles, playing or singing on each other's records, producing them, opening for each other). Par is the closest connection through well-known artists (10+ Wikipedia editions); a shorter route beats it. The puzzles are a committed list, `src/game/puzzles.json`, one per day from `DAILY_START`; `src/game/PUZZLES.md` explains how they were chosen. There are also random puzzles from the list, and custom games between any two artists (par = shortest path). The page opens straight away with today's puzzle and its moves: until the music graph has downloaded, the moves come from the server.
 
 ## Discover
 

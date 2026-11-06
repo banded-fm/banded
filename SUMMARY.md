@@ -93,7 +93,8 @@ Explore mode:
 
 Game mode (Six Degrees of Music):
     On load → today's puzzle from src/game/puzzles.json (puzzles.ts: day 0 = DAILY_START,
-              local date; the list repeats). Shown at once: endpoints and par need no graph.
+              local date; the list repeats). Shown at once: endpoints and par need no graph,
+              and the moves come from the server until it loads (game/walk.ts).
         → Puzzles: curated artists (artists.ts) of the same type whose closest connection
           through known artists (10+ Wikipedia editions) is 3-5 hops; par = those hops
           (no +1), path = that connection. How they were chosen: src/game/PUZZLES.md
@@ -224,6 +225,7 @@ src/
 │   │                       start/end points and the graph build's curated seeds (process_mb_dump.py reads it).
 │   ├── puzzles.json      — The daily Six Degrees puzzles (1,095, schedule order; day n plays n % length): start, end, the artists in between (par = those + 1).
 │   ├── puzzles.ts        — Reads puzzles.json: dailyPuzzle(date) (day 0 = DAILY_START), findPuzzle, randomPuzzle.
+│   ├── walk.ts           — walkGame: follows the guesses from the start and lists the moves, from the server until the graph loads.
 │   └── PUZZLES.md        — How the puzzles were chosen: difficulty baseline, fame measure, tests, rules, schedule.
 ├── graph/
 │   ├── types.ts          — Node types, edge types, color maps.
@@ -391,7 +393,7 @@ CREATE TABLE graph_meta_added_nodes (value TEXT PRIMARY KEY); -- acts it added (
 ## Key design decisions
 
 - **SQLite in browser**: Precomputed graph loaded via sql.js WASM. ~72MB download (gzipped, kept under 74MB; loaded in the background, and resumed with Range requests when a mobile connection drops: `db/download.ts`), instant queries.
-- **Lazy graph loading**: Pages never wait for the graph download. It starts in the background after the first render (`preloadDb()` in `main.tsx`), and until it finishes `graphSource.ts` and the tiered access answer from Postgres `graph-neighbors`, which holds every artist. After it finishes they still ask Postgres for an artist the browser graph doesn't have (it's cut to fit the download), so Explore and Discover find e.g. Zach Bryan whether or not the download has finished. An artist Postgres doesn't have either comes live from MusicBrainz (`api/musicbrainzSubgraph.ts`, shared with the tiered access), so anything the search dropdown offers can be explored. Those requests pass `log=0`, so nothing is added to `search_misses` while the graph is downloading. Postgres only returns 1-hop neighborhoods, so Similarity scores computed before the download finishes can be less precise. Play renders immediately too: today's puzzle, a random puzzle and any listed puzzle (including a shared one) show their start, end and par at once from puzzles.json, a saved game comes back in full, and a shared custom game shows its start and end when they are curated artists; only the list of moves (and a custom game's path) waits for the graph.
+- **Lazy graph loading**: Pages never wait for the graph download. It starts in the background after the first render (`preloadDb()` in `main.tsx`), and until it finishes `graphSource.ts` and the tiered access answer from Postgres `graph-neighbors`, which holds every artist. After it finishes they still ask Postgres for an artist the browser graph doesn't have (it's cut to fit the download), so Explore and Discover find e.g. Zach Bryan whether or not the download has finished. An artist Postgres doesn't have either comes live from MusicBrainz (`api/musicbrainzSubgraph.ts`, shared with the tiered access), so anything the search dropdown offers can be explored. Those requests pass `log=0`, so nothing is added to `search_misses` while the graph is downloading. Postgres only returns 1-hop neighborhoods, so Similarity scores computed before the download finishes can be less precise. Play renders immediately too: today's puzzle, a random puzzle and any listed puzzle (including a shared one) show their start, end and par at once from puzzles.json, a saved game comes back in full, and a shared custom game shows its start and end when they are curated artists; the moves come from Postgres until it arrives (`game/walk.ts`), so only a new custom game's path waits for the graph.
 - **Gzip auto-detection**: Checks first 2 bytes for gzip magic number (1f 8b). Decompresses manually if browser didn't (GitHub Pages). Skips if Vite already decompressed (Content-Encoding: gzip).
 - **Game restricted to band relationships**: BFS and valid moves only use member_of, former_member_of, support_musician. Collaborations and opened_for are not used in gameplay (too loose a tie for the puzzle).
 - **Compilation filter (runtime)**: Album nodes with >25 connections skipped during BFS. A no-op now that graphs have no album nodes; kept for older graph files.

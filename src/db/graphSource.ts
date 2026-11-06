@@ -112,6 +112,11 @@ export function inLocalGraph(id: string): boolean {
   return isDbLoaded() && findNodeById(id) !== null;
 }
 
+/** An artist's 1-hop neighbors from the server (else MusicBrainz), even when the local graph has the artist. */
+export async function getServerNeighbors(id: string): Promise<Neighbor[]> {
+  return (await remoteOrMusicBrainz(id))?.neighbors ?? [];
+}
+
 /** An artist's 1-hop neighbors (both edge directions): from the local graph if it has the artist, else the server, else MusicBrainz. */
 export async function getArtistNeighbors(id: string): Promise<Neighbor[]> {
   if (inLocalGraph(id)) return getNeighbors(id);
