@@ -11,6 +11,7 @@
     "test:watch": "vitest",
     "upload-graph": "npx wrangler r2 object put musicscenemap-graph/graph.db.gz --file public/graph.db.gz --content-type application/gzip --remote",
     "add-concerts": "python3 scripts/add_concertdb_edges.py",
+    "upload-scenes": "npx wrangler r2 object put musicscenemap-graph/scenes.json --file public/scenes.json --content-type application/json --remote",
     "regen-graph": "python3 scripts/process_mb_dump.py && python3 scripts/add_concertdb_edges.py && npm run upload-graph"
   },
   "dependencies": {

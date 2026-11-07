@@ -319,3 +319,33 @@ input {
 .search-input-highlight {
   animation: highlight-fade 0.8s ease-out forwards;
 }
+
+/* Scenes (in development): the world map's countries, and the scene panel (a card on the right; a bottom sheet on phones) */
+.scenes-world path {
+  fill: #1e2a33;
+  stroke: #34495a;
+  stroke-width: 0.6px;
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+}
+.scenes-hit { cursor: pointer; }
+.scene-panel {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  width: 340px;
+  max-height: calc(100% - 1.5rem);
+  border-radius: 12px;
+}
+@media (max-width: 640px) {
+  .scene-panel {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: 55%;
+    border-radius: 12px 12px 0 0;
+    padding-bottom: max(1.25rem, env(safe-area-inset-bottom)) !important;
+  }
+}

@@ -14,6 +14,8 @@ supabase/.temp
 public/graph.db
 public/graph.db-shm
 public/graph.db-wal
+# Scenes for the map (scripts/find_scenes.py --app); served from R2, see scripts/README.md
+public/scenes.json
 
 # Local secrets (Cloudflare, Supabase)
 .env

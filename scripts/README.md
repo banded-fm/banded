@@ -70,7 +70,16 @@ python3 scripts/find_scenes.py --all --lastfm ~/Downloads/archive.zip   # + Last
 python3 scripts/find_scenes.py --city "Los Angeles" --area "Orange County"
 python3 scripts/find_scenes.py --city "Portland, Maine"
 python3 -m pytest scripts/test_find_scenes.py            # offline tests
+# the app's map (#/scenes, not in the menu yet): a smaller file, then to R2
+python3 scripts/find_scenes.py --all --lastfm ~/Downloads/archive.zip --app public/scenes.json
+npm run upload-scenes                                    # → cdn.banded.fm/scenes.json
 ```
+
+`--app` writes the map's file (`public/scenes.json`, gitignored, ~2.8 MB,
+~1.2 MB gzipped): each scene without its full artist list (its 12 most
+connected artists as `[id, name]`) and with genre and tag names only. The
+page loads `scenes.json` next to the app first (local dev), then from the CDN
+next to the graph.
 
 Defaults: the shows export from `$CONCERTDB_SHOWS`, else
 `~/banded-data/data/export/shows.csv`; the graph from `public/graph.db.gz`;

@@ -425,3 +425,18 @@ def test_fetch_release_dates(tmp_path, monkeypatch):
     monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
     assert fs.fetch_release_dates(tmp_path) == ["mbdump/release_group_meta"]
     assert urls[1].endswith("/mbdump-derived.tar.bz2") and (tmp_path / "release_group_meta").exists()
+
+
+def test_app_file(conn, shows_csv, tmp_path):
+    conn.close()
+    app = tmp_path / "public" / "scenes.json"
+    fs.main(["--all", "--min-shows", "1", "--graph", str(tmp_path / "graph.db"), "--shows", str(shows_csv),
+             "--out", str(tmp_path / "all.json"), "--app", str(app)])
+    data = json.loads(app.read_text())
+    la = data["cities"][0]
+    punk = next(s for s in la["scenes"] if s["name"] == "Los Angeles punk")
+    assert set(la) == {"id", "city", "country", "centre", "scenes"}
+    assert set(punk) == {"id", "name", "size", "era", "location", "genres", "tags", "artists"}
+    assert punk["genres"] == ["punk"] and punk["tags"] == [] and punk["era"] is None
+    assert len(punk["artists"]) <= fs.APP_ARTISTS and punk["artists"][0][0].startswith("p")
+    assert set(punk["location"]) == {"lat", "lon", "place", "venue"}

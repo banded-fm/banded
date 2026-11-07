@@ -1047,6 +1047,26 @@ def write(result: dict, path: str | Path) -> Path:
     return path
 
 
+APP_ARTISTS = 12           # artists per scene in the app's file
+
+
+def app_data(cities: list[dict], meta: dict) -> dict:
+    """The scenes for the app's map (src/scenes/sceneMap.ts): each scene without its full artist list (its
+    APP_ARTISTS most connected, as [id, name]) and with genre and tag names only. ~3 MB instead of ~26."""
+    def scene(s):
+        era = s.get("era")
+        return {
+            "id": s["id"], "name": s["name"], "size": s["size"],
+            "era": {k: era[k] for k in ("from", "to", "peak", "label")} if era else None,
+            "location": {k: s["location"].get(k) for k in ("lat", "lon", "place", "venue")},
+            "genres": [g for g, _ in s["top_genres"][:4]],
+            "tags": [t for t, *_ in s["lastfm"]["distinctive_tags"][:5]] if s.get("lastfm") else [],
+            "artists": [[a["id"], a["name"]] for a in s["artists"][:APP_ARTISTS]],
+        }
+    return {**meta, "cities": [{"id": c["id"], "city": c["city"], "country": c["country"], "centre": c["centre"],
+                                "scenes": [scene(s) for s in c["scenes"]]} for c in cities]}
+
+
 def default_path(city: str | None) -> Path:
     return DEFAULT_OUT_DIR / (f"{slug(city)}.json" if city else "scenes.json")
 
@@ -1089,6 +1109,7 @@ def main(argv=None) -> None:
     p.add_argument("--min-size", type=int, default=MIN_SIZE, help="smallest scene, in artists")
     p.add_argument("--resolution", type=float, default=RESOLUTION, help="higher splits into more, smaller scenes")
     p.add_argument("--out", help="default scripts/data/scenes/<city>.json, or scenes.json with --all")
+    p.add_argument("--app", help="also write the app's smaller file here (public/scenes.json; npm run upload-scenes)")
     args = p.parse_args(argv)
 
     if args.fetch:
@@ -1121,6 +1142,11 @@ def main(argv=None) -> None:
             "graph_built_at": graph.built_at, "lastfm": Path(args.lastfm).name if args.lastfm else None}
     result = {**meta, "cities": cities} if args.all else {**meta, **cities[0]}
     out = write(result, args.out or default_path(None if args.all else args.city))
+    if args.app:
+        app = Path(args.app)
+        app.parent.mkdir(parents=True, exist_ok=True)
+        app.write_text(json.dumps(app_data(cities, meta), ensure_ascii=False, separators=(",", ":")))
+        print(f"wrote {app} ({app.stat().st_size / 1e6:.1f} MB) for the app")
     for c in cities:
         _print_city(c)
     print(f"{len(cities)} cities, {sum(len(c['scenes']) for c in cities)} scenes; wrote {out}")
