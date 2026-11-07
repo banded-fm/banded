@@ -24,7 +24,9 @@ VENUES = {"The Echo": (1, "Los Angeles", "California", LA), "Bottom of the Hill"
           "Saturn": (6, "Birmingham", "Alabama", (33.52, -86.80)),
           "Arena": (7, "Vienna", "", (48.19, 16.38)),
           "Mississippi Studios": (8, "Portland", "Oregon", (45.55, -122.68)),
-          "Port City Music Hall": (9, "Portland", "Maine", (43.66, -70.26))}
+          "Port City Music Hall": (9, "Portland", "Maine", (43.66, -70.26)),
+          "Riverside Plaza": (10, "Riverside", "California", (33.95, -117.40)),   # ~80 km from LA: nearby
+          "Riverside Tavern": (11, "Riverside", "England", (51.50, -0.10))}
 
 
 def _band(prefix, area, genre, n=9):
@@ -47,16 +49,16 @@ def conn(tmp_path):
         ("brum", "Brum Band", "group", "Birmingham", "4"),       # no shows: the bigger Birmingham
         ("bama", "Bama Band", "group", "Birmingham", "4"),       # plays Birmingham, Alabama
         ("wien", "Wiener", "person", "Wien", "4"),               # MusicBrainz's local name for Vienna
-        ("adoptee", "No Area", "person", "", "1"),               # in the punk band, no area: adopted
-        ("cali", "Cali", "person", "California", "1"),           # in the punk band, a state of the country: adopted
-        ("brit", "Brit", "person", "United Kingdom", "1"),       # in the punk band, but another country: not
+        ("adoptee", "No Area", "person", "", "1"),               # records with the punks, no area: adopted
+        ("cali", "Cali", "person", "California", "1"),           # records with the punks, a state: adopted
+        ("brit", "Brit", "person", "United Kingdom", "1"),       # records with the punks, another country: not
         ("split", "Split", "person", "", "1"),                   # half its ties elsewhere: not adopted
     ]
     edges = punk_e + rap_e + [("kim", "r1", "collaborated_with", 1), ("sf", "p0", "opened_for", None),
-                              ("adoptee", "p0", "member_of", None), ("adoptee", "p1", "collaborated_with", 3),
-                              ("cali", "p0", "member_of", None), ("cali", "p2", "collaborated_with", 3),
-                              ("brit", "p0", "member_of", None), ("brit", "p3", "collaborated_with", 3),
-                              ("split", "p0", "member_of", None), ("split", "sf", "member_of", None)]
+                              ("adoptee", "p1", "collaborated_with", 3), ("adoptee", "p2", "collaborated_with", 3),
+                              ("cali", "p2", "collaborated_with", 3), ("cali", "p3", "collaborated_with", 3),
+                              ("brit", "p3", "collaborated_with", 3), ("brit", "p4", "collaborated_with", 3),
+                              ("split", "p0", "collaborated_with", 3), ("split", "sf", "collaborated_with", 3)]
     g = sqlite3.connect(tmp_path / "graph.db")
     g.executescript("""
         CREATE TABLE nodes (id TEXT PRIMARY KEY, name TEXT, type TEXT, disambiguation TEXT, area TEXT, genres TEXT);
@@ -97,6 +99,9 @@ def shows_csv(tmp_path):
     show("2025-08-05", "Mississippi Studios", ["x4"])
     show("2025-08-06", "Mississippi Studios", ["x5"])
     show("2025-08-07", "Port City Music Hall", ["x6"])
+    show("2025-08-08", "Riverside Plaza", ["x7"])
+    show("2025-08-09", "Riverside Tavern", ["x8"])
+    show("2025-08-10", "Riverside Tavern", ["x9"])          # the English Riverside has more shows
     path = tmp_path / "shows.csv"
     with open(path, "w", newline="") as f:
         w = csv.writer(f)
@@ -121,6 +126,36 @@ def lastfm_zip(tmp_path):
     with zipfile.ZipFile(z, "w") as zf:
         zf.write(path, "artists.csv")
     return z
+
+
+# MusicBrainz's area tree, as the dump files in scripts/data/mbdump hold it (tab-separated, \N for null).
+AREAS = [  # id, name, type (1 country, 2 subdivision, 3 city, 5 district, 7 county), part of
+    ("1", "United States", "1", None), ("2", "California", "2", "1"), ("3", "Los Angeles", "3", "2"),
+    ("4", "Silver Lake", "5", "3"), ("6", "Riverside County", "7", "2"), ("5", "Riverside", "3", "6"),
+    ("10", "Corona", "3", "6"), ("7", "United Kingdom", "1", None), ("8", "England", "2", "7"),
+    ("9", "Riverside", "3", "8")]
+AREA_ARTISTS = [  # mbid, name, area id (the graph has the area's name)
+    ("rivband", "River Band", "5"), ("silver", "Silver", "4"), ("corona", "Corona Band", "10")]
+
+
+@pytest.fixture
+def mbdump(tmp_path, conn):
+    d = tmp_path / "mbdump"
+    d.mkdir()
+    N = "\\N"
+    (d / "area").write_text("".join(f"{i}\tgid{i}\t{n}\t{t}\t0\n" for i, n, t, _ in AREAS))
+    (d / "link_type").write_text(f"356\t{N}\t0\tgid\tarea\tarea\tpart of\n"
+                                 f"103\t{N}\t0\tgid\tartist\tartist\tmember of band\n")
+    (d / "link").write_text("118734\t356\t\n")
+    (d / "l_area_area").write_text("".join(f"{k}\t118734\t{p}\t{i}\t0\n"
+                                           for k, (i, _, _, p) in enumerate(AREAS) if p))
+    rows = []
+    for m, name, aid in AREA_ARTISTS:
+        rows.append("\t".join([str(len(rows) + 1), m, name, name] + [N] * 7 + [aid] + [N] * 5 + [N, N]))
+        conn.execute("INSERT INTO nodes VALUES (?, ?, 'group', NULL, ?, '1')", (m, name, dict((i, n) for i, n, _, _ in AREAS)[aid]))
+    (d / "artist").write_text("\n".join(rows) + "\n")
+    (d / "l_artist_artist").write_text("")
+    return d
 
 
 def _la(shows_csv, conn, **kw):
@@ -174,6 +209,49 @@ def test_extra_area(conn, shows_csv):
     conn.executemany("INSERT INTO edges VALUES (?, ?, ?, ?)", oc_e)
     assert len(_la(shows_csv, conn)["scenes"]) == 2
     assert "Los Angeles rock" in {s["name"] for s in _la(shows_csv, conn, extra_areas=("Orange County",))["scenes"]}
+
+
+def test_area_tree(conn, shows_csv, mbdump):
+    shows, graph = fs.read_shows(shows_csv), fs.load_graph(conn)
+    areas = fs.read_areas(mbdump, {m: n[2] for m, n in graph.nodes.items() if n[2]})
+    assert areas.path("4") == (["4", "3"], "California", "United States")
+    by_name = fs.home_cities(shows, graph)
+    tree = fs.home_cities(shows, graph, areas)
+    riverside_ca, riverside_uk = ("riverside", "california", "united states"), ("riverside", "england", "united kingdom")
+    assert by_name["rivband"] == riverside_uk           # by name: the Riverside with more shows
+    assert tree["rivband"] == riverside_ca              # the area tree knows it's in California
+    assert tree["silver"] == ("los angeles", "california", "united states")   # a district -> its city
+    assert tree["corona"] == riverside_ca               # not a venue city: the venue city in its county
+    assert "corona" not in by_name
+    assert fs.read_areas(mbdump.parent / "nowhere", {}) is None
+
+
+def test_nearby_towns_and_band_members(conn, shows_csv, mbdump):
+    shows, graph = fs.read_shows(shows_csv), fs.load_graph(conn)
+    areas = fs.read_areas(mbdump, {m: n[2] for m, n in graph.nodes.items() if n[2]})
+    la = fs.metro_for(shows, fs.find_city(shows, "Los Angeles"))
+    sf = fs.metro_for(shows, fs.find_city(shows, "San Francisco"))
+    fs.assign_nearby(shows, [la, sf])
+    assert ("riverside", "california", "united states") in la.nearby and not sf.nearby
+    conn.execute("INSERT INTO nodes VALUES ('drummer', 'Drummer', 'person', NULL, 'Warren', '1')")   # Ohio
+    conn.execute("INSERT INTO edges VALUES ('drummer', 'p0', 'member_of', NULL)")
+    graph = fs.load_graph(conn)
+    r = fs.find(shows, graph, la, homes=fs.home_cities(shows, graph, areas))
+    assert r["local_by"]["nearby"] == 2                 # River Band and Corona Band
+    punk = next(s for s in r["scenes"] if s["name"] == "Los Angeles punk")
+    assert {a["id"]: a["local"] for a in punk["artists"]}["drummer"] == "band"
+
+
+def test_a_band_between_scenes_stays_with_the_stronger(conn, shows_csv):
+    oc_n, oc_e = _band("o", "Los Angeles", 4)
+    conn.executemany("INSERT INTO nodes VALUES (?, ?, ?, NULL, ?, ?)", oc_n)
+    conn.executemany("INSERT INTO edges VALUES (?, ?, ?, ?)", oc_e)
+    # 4 of its 10 ties to the punks, 3 to the rock band, 3 to the rappers: under half, but the strongest
+    conn.execute("INSERT INTO nodes VALUES ('bridge', 'Bridge', 'group', NULL, 'Los Angeles', '1')")
+    conn.executemany("INSERT INTO edges VALUES (?, ?, 'collaborated_with', ?)",
+                     [("bridge", "p1", 3), ("bridge", "p2", 1), ("bridge", "o1", 3), ("bridge", "r1", 3)])
+    scenes = _la(shows_csv, conn)["scenes"]
+    assert [s["name"] for s in scenes if any(a["id"] == "bridge" for a in s["artists"])] == ["Los Angeles punk"]
 
 
 def test_major_metros_and_cities(shows_csv):
@@ -256,3 +334,30 @@ def test_main(conn, shows_csv, lastfm_zip, tmp_path, capsys):
     assert "Los Angeles punk" in capsys.readouterr().out
     assert fs.default_path("Los Angeles") == fs.DEFAULT_OUT_DIR / "los-angeles.json"
     assert fs.default_path(None) == fs.DEFAULT_OUT_DIR / "scenes.json"
+
+
+def test_fetch_area_tree(tmp_path, monkeypatch):
+    """Streams the dump until it has l_area_area (and area if missing), then stops."""
+    import io
+    import tarfile
+    import urllib.request
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:bz2") as tar:
+        for name, data in (("mbdump/artist", b"x\n"), ("mbdump/l_area_area", b"1\t2\t3\t4\n"),
+                           ("mbdump/zzz_never_read", b"y\n")):
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+    urls = []
+
+    def fake_urlopen(req, timeout=None):
+        urls.append(req.full_url)
+        return io.BytesIO(b"20261104-001001\n" if req.full_url.endswith("LATEST") else buf.getvalue())
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    d = tmp_path / "mbdump"
+    d.mkdir()
+    (d / "area").write_text("already here\n")
+    assert fs.fetch_area_tree(d) == ["mbdump/l_area_area"]
+    assert (d / "l_area_area").read_text() == "1\t2\t3\t4\n" and not (d / "artist").exists()
+    assert urls[1].endswith("/20261104-001001/mbdump.tar.bz2")
+    assert fs.fetch_area_tree(d) == []                  # nothing to do the second time

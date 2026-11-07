@@ -64,7 +64,8 @@ Writes `scripts/data/scenes/scenes.json` (`--all`) or `<city>.json`
 # in banded-data: every act on every show, with the venue's city and coordinates
 .venv/bin/concertdb export shows --musicbrainz-only     # data/export/shows.csv
 # here
-python3 scripts/find_scenes.py --all                     # every city with 1,000+ shows (~30 s)
+python3 scripts/find_scenes.py --all --fetch-areas       # once: MusicBrainz's area tree (~2 GB streamed)
+python3 scripts/find_scenes.py --all                     # every city with 1,000+ shows (~3 min)
 python3 scripts/find_scenes.py --all --lastfm ~/Downloads/archive.zip   # + Last.fm tags
 python3 scripts/find_scenes.py --city "Los Angeles" --area "Orange County"
 python3 scripts/find_scenes.py --city "Portland, Maine"
@@ -73,8 +74,11 @@ python3 -m pytest scripts/test_find_scenes.py            # offline tests
 
 Defaults: the shows export from `$CONCERTDB_SHOWS`, else
 `~/banded-data/data/export/shows.csv`; the graph from `public/graph.db.gz`;
-Last.fm from `$LASTFM_ARTISTS` (optional: the Kaggle "Music artists
-popularity" dataset, 2019, keyed by MusicBrainz ID; not committed).
+MusicBrainz's area tree from `scripts/data/mbdump` (`artist`, `area`, `link`,
+`link_type` from `process_mb_dump.py`, and `l_area_area`, which
+`--fetch-areas` streams from the latest full dump; without it areas are
+matched by name); Last.fm from `$LASTFM_ARTISTS` (optional: the Kaggle "Music
+artists popularity" dataset, 2019, keyed by MusicBrainz ID; not committed).
 
 How it works (details in the script's docstring):
 
@@ -83,21 +87,26 @@ How it works (details in the script's docstring):
    (`--min-shows`) that isn't within 45 km of a bigger one: Long Beach and
    Pasadena are Los Angeles, Liverpool isn't Manchester. Where two metros'
    45 km circles overlap, a city goes with the nearer one.
-2. **Local artists**: a MusicBrainz area naming one of the metro's cities
-   (local spellings too: Wien, München, Köln), or 3+ shows here making up
-   60%+ of the artist's shows. A name several cities share (Birmingham) is
-   the one the artist plays most, else the one with the most shows. Then
-   artists with no city of their own (no area, or just the country or a
-   state) are adopted if their ties are mostly here: 3+ in weight and two
-   thirds of all their ties (Tim Commerford, "California", Rage Against the
-   Machine's bassist). Each artist says why it's local: `area`, `shows` or
-   `ties`.
+2. **Local artists**, each marked with why:
+   - `area`: its MusicBrainz area is one of the metro's cities. The area tree
+     places it in its state and country (Aberdeen, Washington, not Aberdeen,
+     Scotland) and walks up from a district to its city (Silver Lake → Los
+     Angeles), or across to the venue city in its county (Montesano → Grays
+     Harbor County → Aberdeen).
+   - `nearby`: its town is in no metro, and this is the nearest within 150 km
+     (`--nearby-km`): Aberdeen and Olympia count for Seattle.
+   - `shows`: 3+ shows here making up 60%+ of the artist's shows.
+   - `band`: a person in a local band, whatever their own area (MusicBrainz
+     often has where they were born: Krist Novoselic, Compton).
+   - `ties`: no city that counts anywhere, and ties mostly here (3+ in weight,
+     two thirds of all its ties): Tim Commerford ("California").
 3. **Links**: band membership 3, support musician or opening slot 2,
    producer 1, shared song credits and bills shared here 1 each (up to 3).
 4. **Groups**: Louvain communities (resolution 1.5, fixed seed).
-5. **Not every artist is in a scene**: one stays only if at least half its
-   link weight here is inside its group and that weight is 3+. Groups under 8
-   artists are dropped.
+5. **Not every artist is in a scene**: one stays with the group most of its
+   ties go to if those weigh 3+ and are at least a third of its ties here, so
+   a band between two scenes stays with the stronger (Green River, with Pearl
+   Jam's side). Groups under 8 artists are dropped.
 6. **For naming**: each scene's top and distinctive MusicBrainz genres; with
    `--lastfm`, its top and distinctive Last.fm tags, tags naming a place or a
    scene ("detroit techno", "la punk scene", "aggro berlin"), and its
@@ -109,18 +118,24 @@ How it works (details in the script's docstring):
    shared bills or played; else the place most of them come from; else the
    city centre.
 
-November 2026 (`--all --lastfm`): 80 cities, 1,479 scenes (Los Angeles: 5,140
-local artists, 1,729 of them adopted by ties; 2,833 in 63 scenes). Each city in the
-JSON has `id`, `city`, `state`, `country`, `centre`, `radius_km`, `places`,
-`shows`, `local_artists`, `local_by`, `in_scenes` and `scenes`; each scene has `id`,
-`name`, `size`, `location` (`lat`, `lon`, `place`, `venue`, `source`,
-`spread_km`, top `venues`), `top_genres`, `distinctive_genres` (share, lift),
-`places`, `lastfm` (`top_tags`, `distinctive_tags`, `place_tags`,
-`most_listened`) and `artists` (`id`, `name`, `type`, `links`, `local`).
+November 2026 (`--all --lastfm`): 80 cities, 2,917 scenes, 110,473 of 144,926
+local artists in one. Seattle: 2,354 local artists (864 by area, 108 nearby,
+1,032 through their bands, 343 by ties), 1,927 in 55 scenes: Nirvana, the
+Melvins and Kurt Cobain together (Aberdeen), Mudhoney's, Soundgarden and
+Pearl Jam's with Green River and Mother Love Bone, Alice in Chains', and
+Olympia's riot grrrl (Bikini Kill, Beat Happening).
 
-Limits: no sense of era yet; an area is a name only, so an artist from a
-smaller same-named city with no shows lands in the bigger one (Halifax, Nova
-Scotia in Halifax, England).
+Each city in the JSON has `id`, `city`, `state`, `country`, `centre`,
+`radius_km`, `places`, `shows`, `local_artists`, `local_by`, `in_scenes` and
+`scenes`; each scene has `id`, `name`, `size`, `location` (`lat`, `lon`,
+`place`, `venue`, `source`, `spread_km`, top `venues`), `top_genres`,
+`distinctive_genres` (share, lift), `places`, `lastfm` (`top_tags`,
+`distinctive_tags`, `place_tags`, `most_listened`) and `artists` (`id`,
+`name`, `type`, `links`, `local`).
+
+Limits: no sense of era yet; an artist is in one scene at most; an area that
+is only a country or state gives no city; towns over 150 km out (Ellensburg,
+Screaming Trees) count for no metro.
 
 ## seed_supabase.py
 
