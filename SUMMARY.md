@@ -44,7 +44,8 @@ Data pipeline (offline, run manually):
         → scripts/find_scenes.py (on demand): music scenes in every city with 1,000+ shows
           (or one --city), each with a suggested name, a location, genres and optional
           Last.fm tags; artists placed by MusicBrainz's area tree, nearby towns, their
-          bands and their ties → scripts/data/scenes/scenes.json (not used by the app yet)
+          bands and their ties; an era from when its artists started
+          → scripts/data/scenes/scenes.json (not used by the app yet)
 
 App loading (lazy, non-blocking):
     UI renders immediately; main.tsx calls preloadDb() once the browser is idle

@@ -23,9 +23,11 @@ Inputs:
     underground"). Not committed; pass --lastfm or set $LASTFM_ARTISTS;
   - MusicBrainz's area tree (scripts/data/mbdump: artist, area, l_area_area,
     link, link_type), so an area is placed in its state and country
-    (Aberdeen, Washington, not Aberdeen, Scotland). l_area_area isn't one of
-    process_mb_dump.py's tables: --fetch-areas downloads it once. Without it,
-    areas are matched by name.
+    (Aberdeen, Washington, not Aberdeen, Scotland), and when artists started
+    (artist, release_group, artist_credit_name, release_group_meta, link,
+    link_type, l_artist_artist). l_area_area and release_group_meta aren't
+    among process_mb_dump.py's tables: --fetch downloads them once. Without
+    them, areas are matched by name and scenes get no era.
 
 Needs networkx (pip install networkx).
 
@@ -72,7 +74,8 @@ Steps:
      the same for its artists' tags, the tags that mention a place or a scene
      ("canterbury scene", "bay area thrash"), and its most-listened artists.
   7. Name (a suggestion): the place plus the most distinctive genre a bigger
-     scene there hasn't taken, e.g. "Los Angeles thrash metal" ("Detroit
+     scene there hasn't taken, or has but in other years ("Detroit techno
+     (1987–1998)"), e.g. "Los Angeles thrash metal" ("Detroit
      techno", not "Detroit detroit techno"), else its most distinctive Last.fm
      tag that is a style (not a decade, nationality or place), e.g.
      "Liverpool merseybeat". The place is the city, or a place within it that
@@ -81,8 +84,16 @@ Steps:
      those where the scene's artists shared bills (3+ shows), or else played
      (5+ shows); the place most of them come from; the city centre.
      `spread_km` is the median distance of those shows from it.
+  9. Era: when the scene's artists started out. An artist's first year is its
+     first release (the 10th percentile of its release groups' first release
+     years, past stray early dates), the year a group formed, or its first
+     dated band membership. Weighted by each artist's ties inside the scene,
+     the era runs from the 20th to the 80th percentile, with the busiest five
+     years' middle as its peak: Seattle grunge 1985–1992, Liverpool
+     merseybeat 1959–1963, Detroit techno 1991–2001.
 
-Limits: no sense of era yet; names need a human pass ("Los Angeles rock");
+Limits: names need a human pass ("Los Angeles rock"); an era describes a
+scene, it doesn't split one that spans generations;
 an area that is only a country or state ("California") gives no city;
 an artist is in one scene at most.
 """
@@ -344,16 +355,26 @@ DUMP_URL = "https://data.metabrainz.org/pub/musicbrainz/data/fullexport/"
 def fetch_area_tree(mbdump: str | Path) -> list[str]:
     """Stream MusicBrainz's latest full dump just far enough to extract the area tables process_mb_dump.py
     doesn't keep (l_area_area; area if missing): ~2 GB read in a few minutes, nothing big saved."""
+    return _fetch(mbdump, "mbdump.tar.bz2", ("l_area_area", "area"))
+
+
+def fetch_release_dates(mbdump: str | Path) -> list[str]:
+    """The same from the derived dump for release_group_meta (each release group's first release date):
+    ~1 GB read in about a minute."""
+    return _fetch(mbdump, "mbdump-derived.tar.bz2", ("release_group_meta",))
+
+
+def _fetch(mbdump: str | Path, archive: str, tables: tuple[str, ...]) -> list[str]:
     import tarfile
     import urllib.request
     d = Path(mbdump)
     d.mkdir(parents=True, exist_ok=True)
-    want = {f"mbdump/{t}" for t in ("l_area_area", "area") if not (d / t).exists()}
+    want = {f"mbdump/{t}" for t in tables if not (d / t).exists()}
     if not want:
         return []
     headers = {"User-Agent": "Banded/0.1 ( https://banded.fm )"}
     latest = urllib.request.urlopen(urllib.request.Request(DUMP_URL + "LATEST", headers=headers), timeout=60)
-    url = f"{DUMP_URL}{latest.read().decode().strip()}/mbdump.tar.bz2"
+    url = f"{DUMP_URL}{latest.read().decode().strip()}/{archive}"
     print(f"streaming {url} for {', '.join(sorted(want))}")
     got = []
     with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=120) as resp, \
@@ -419,6 +440,126 @@ def read_areas(mbdump: str | Path, wanted: dict) -> Areas | None:
             if p[1] in links:
                 parent.setdefault(p[3], p[2])      # entity0 contains entity1
     return Areas(artist_area, name, typ, parent)
+
+
+ERA_FILES = ("artist", "release_group", "artist_credit_name", "release_group_meta", "link", "link_type",
+             "l_artist_artist")
+MEMBER_OF_BAND = "member of band"
+ERA_TRIM = 0.1             # an artist's years run from its 10th to 90th percentile release (reissues, late compilations)
+ERA_SHARE = 0.2            # a scene's era: the 20th to 80th percentile of when its artists started
+FIRST_YEAR = 1900
+
+
+@dataclass
+class Years:
+    """When artists were active, from MusicBrainz: release groups' first release years, groups' formed and
+    dissolved years, and dated band memberships."""
+    span: dict                    # mbid -> (from, to)
+    member: dict                  # (person mbid, group mbid) -> (from, to or None)
+
+
+def read_years(mbdump: str | Path, wanted: set) -> Years | None:
+    """None, with a note, when a file is missing (scenes then get no era)."""
+    d = Path(mbdump)
+    missing = [f for f in ERA_FILES if not (d / f).exists()]
+    if missing:
+        print(f"note: no {', '.join(missing)} in {d}: no eras (find_scenes.py --fetch adds release_group_meta)")
+        return None
+    this_year = datetime.now(timezone.utc).year
+
+    def year(x: str) -> int | None:
+        return int(x) if x not in ("\\N", "") and FIRST_YEAR <= int(x) <= this_year else None
+    mbid_of, formed = {}, {}
+    with open(d / "artist", encoding="utf-8") as f:
+        for line in f:
+            p = line.split("\t", 11)
+            if p[1] in wanted:
+                mbid_of[p[0]] = p[1]
+                if p[10] != "1":                   # not a person: begin and end are formed and dissolved
+                    formed[p[1]] = (year(p[4]), year(p[7]))
+    credits = defaultdict(list)
+    with open(d / "artist_credit_name", encoding="utf-8") as f:
+        for line in f:
+            p = line.split("\t", 3)
+            if p[2] in mbid_of:
+                credits[p[0]].append(mbid_of[p[2]])
+    first = {}
+    with open(d / "release_group_meta", encoding="utf-8") as f:
+        for line in f:
+            p = line.split("\t", 3)
+            y = year(p[2])
+            if y:
+                first[p[0]] = y
+    released = defaultdict(list)
+    with open(d / "release_group", encoding="utf-8") as f:
+        for line in f:
+            p = line.split("\t", 4)
+            y = first.get(p[0])
+            if y and p[3] in credits:
+                for m in credits[p[3]]:
+                    released[m].append(y)
+    band_type = None
+    with open(d / "link_type", encoding="utf-8") as f:
+        for line in f:
+            p = line.rstrip("\n").split("\t", 7)
+            if p[4] == "artist" and p[5] == "artist" and p[6] == MEMBER_OF_BAND:
+                band_type = p[0]
+    dated = {}
+    with open(d / "link", encoding="utf-8") as f:
+        for line in f:
+            p = line.split("\t", 6)
+            if p[1] == band_type and year(p[2]):
+                dated[p[0]] = (year(p[2]), year(p[5]))
+    member = {}
+    with open(d / "l_artist_artist", encoding="utf-8") as f:
+        for line in f:
+            p = line.split("\t", 4)
+            if p[1] in dated and p[2] in mbid_of and p[3] in mbid_of:
+                member[(mbid_of[p[2]], mbid_of[p[3]])] = dated[p[1]]
+    span = {}
+    for m, ys in released.items():
+        ys.sort()
+        n = len(ys) - 1
+        span[m] = (ys[round(ERA_TRIM * n)], ys[round((1 - ERA_TRIM) * n)])
+    for (person, group), (a, b) in member.items():   # a person's band years widen its span
+        for m in (person,):
+            lo, hi = span.get(m, (a, b or a))
+            span[m] = (min(lo, a), max(hi, b or a))
+    for m, (a, b) in formed.items():
+        if a:
+            lo, hi = span.get(m, (a, b or a))
+            span[m] = (a, b if b else max(hi, a))
+    return Years(span, member)
+
+
+def era_of(core: set, years: Years, inside: Counter) -> dict | None:
+    """When a scene's artists started out: each artist's first year (first release, formed, or first dated
+    band membership), weighted by its ties inside the scene, so the bands at its heart count most and a
+    member's later side projects little. From and to are the 20th and 80th percentiles; the peak is the
+    middle of the busiest five years. Grunge in Seattle: 1985–1992; merseybeat in Liverpool: 1959–1963."""
+    w: Counter = Counter()
+    for m in core:
+        if m in years.span:
+            w[years.span[m][0]] += inside[m] or 1
+    if not w:
+        return None
+    total = sum(w.values())
+
+    def pct(q):
+        acc = 0
+        for y in sorted(w):
+            acc += w[y]
+            if acc >= q * total:
+                return y
+        return max(w)
+    lo, hi = pct(ERA_SHARE), pct(1 - ERA_SHARE)
+    peak = max(sorted(w), key=lambda y: sum(w[x] for x in range(y - 2, y + 3)))
+    decades = Counter()
+    for y, x in w.items():
+        decades[f"{y // 10 * 10}s"] += x / total
+    return {"from": lo, "to": hi, "peak": peak, "label": f"{lo}–{hi}" if hi > lo else str(lo),
+            "decades": {k: round(v, 2) for k, v in sorted(decades.items()) if v >= 0.01},
+            "dated_artists": sum(1 for m in core if m in years.span)}
 
 
 # ---------------------------------------------------------------- metros
@@ -640,7 +781,7 @@ def home_cities(shows: Shows, graph: Graph, areas: Areas | None = None) -> dict:
 
 def find(shows: Shows, graph: Graph, metro: Metro, extra_areas: tuple[str, ...] = (), lastfm: dict | None = None,
          min_size: int = MIN_SIZE, resolution: float = RESOLUTION, seed: int = SEED, homes: dict | None = None,
-         claimed: set | None = None) -> dict:
+         claimed: set | None = None, years: Years | None = None) -> dict:
     """One metro's scenes, as a JSON-ready dict. homes: home_cities(), computed once for many metros.
     claimed: the city keys every metro counts (cities and nearby towns), for adoption; default this one's."""
     nodes = graph.nodes
@@ -736,7 +877,7 @@ def find(shows: Shows, graph: Graph, metro: Metro, extra_areas: tuple[str, ...] 
             insides[best][m] = c[best]
     for core, inside in zip(cores, insides):
         if len(core) >= min_size:
-            scenes.append(_describe(core, inside, graph, base, metro, bills_here, lastfm, how))
+            scenes.append(_describe(core, inside, graph, base, metro, bills_here, lastfm, how, years))
     scenes.sort(key=lambda s: -s["weight"])
     used: Counter = Counter()
     mid = metro_id(metro)
@@ -745,7 +886,7 @@ def find(shows: Shows, graph: Graph, metro: Metro, extra_areas: tuple[str, ...] 
         styles = [g for g, _, _ in s["distinctive_genres"]]
         if "lastfm" in s:
             styles += [t for t in _style_tags(s["lastfm"]["distinctive_tags"], base.place_words) if t not in styles]
-        s["name"] = _name(s.pop("_place"), styles, used)
+        s["name"] = _name(s.pop("_place"), styles, used, (s["era"] or {}).get("label"))
     top_places = sorted(metro.places.values(), key=lambda p: -p["shows"])[:12]
     return {
         "id": mid, "city": metro.name, "state": metro.state or None, "country": metro.country or None,
@@ -795,14 +936,15 @@ def _with_place(place: str, genre: str) -> str:
     return f"{place} {genre}"
 
 
-def _name(place: str, genres: list[str], used: Counter) -> str:
-    """The place and the first genre (or Last.fm tag) a bigger scene there hasn't taken; "<place> scene" without
-    one."""
+def _name(place: str, genres: list[str], used: Counter, era: str | None = None) -> str:
+    """The place and the first genre (or Last.fm tag) a bigger scene there hasn't taken, or has but in other
+    years ("Seattle grunge (1985–1994)"); "<place> scene" without one."""
     for g in genres:
         name = _with_place(place, g)
-        if not used[name]:
-            used[name] += 1
-            return name
+        for candidate in (name, f"{name} ({era})" if era else None):
+            if candidate and not used[candidate]:
+                used[candidate] += 1
+                return candidate
     base = _with_place(place, genres[0]) if genres else f"{place} scene"
     used[base] += 1
     return base if used[base] == 1 else f"{base} {used[base]}"
@@ -827,7 +969,7 @@ def _style_tags(tags: list, place_words) -> list[str]:
     return out
 
 
-def _describe(core, inside, graph: Graph, base: _Baseline, metro: Metro, bills_here, lastfm, how) -> dict:
+def _describe(core, inside, graph: Graph, base: _Baseline, metro: Metro, bills_here, lastfm, how, years) -> dict:
     nodes = graph.nodes
     has = [m for m in core if nodes[m][3]]
     gc = Counter(graph.genre_name.get(g, str(g)) for m in has for g in set(nodes[m][3]))
@@ -870,6 +1012,7 @@ def _describe(core, inside, graph: Graph, base: _Baseline, metro: Metro, bills_h
     scene = {
         "name": None, "_place": place_name, "size": len(core), "weight": sum(inside[m] for m in core) // 2,
         "location": location,
+        "era": era_of(core, years, inside) if years else None,
         "top_genres": top_genres, "distinctive_genres": distinctive,
         "places": [[p, k] for p, k in homes.most_common(5)],
         "artists": [{"id": m, "name": nodes[m][0], "type": nodes[m][1], "links": inside[m], "local": how[m]}
@@ -914,7 +1057,8 @@ def _print_city(c: dict) -> None:
     for s in c["scenes"]:
         loc = s["location"]
         tags = ", ".join(t for t, *_ in s.get("lastfm", {}).get("distinctive_tags", [])[:3])
-        print(f"  {s['name'][:38]:<38} {s['size']:>4}  {loc['place'] or '?'} ({loc['source']})"
+        era = (s.get("era") or {}).get("label", "")
+        print(f"  {s['name'][:44]:<44} {s['size']:>4}  {era:<9}  {loc['place'] or '?'} ({loc['source']})"
               f"  {', '.join(a['name'] for a in s['artists'][:4])}" + (f"  [{tags}]" if tags else ""))
 
 
@@ -935,8 +1079,9 @@ def main(argv=None) -> None:
     p.add_argument("--radius-km", type=float, default=RADIUS_KM)
     p.add_argument("--nearby-km", type=float, default=NEARBY_KM,
                    help=f"towns in no metro count for the nearest within this (default {NEARBY_KM})")
-    p.add_argument("--fetch-areas", action="store_true",
-                   help="first download MusicBrainz's area tree (l_area_area) into --mbdump, if it isn't there")
+    p.add_argument("--fetch", "--fetch-areas", dest="fetch", action="store_true",
+                   help="first download the MusicBrainz tables process_mb_dump.py doesn't keep into --mbdump:"
+                        " the area tree (l_area_area) and release dates (release_group_meta), if missing")
     p.add_argument("--mbdump", default=str(DEFAULT_MBDUMP),
                    help="MusicBrainz dump files with the area tree (default scripts/data/mbdump; see scripts/README.md)")
     p.add_argument("--area", action="append", default=[],
@@ -946,8 +1091,8 @@ def main(argv=None) -> None:
     p.add_argument("--out", help="default scripts/data/scenes/<city>.json, or scenes.json with --all")
     args = p.parse_args(argv)
 
-    if args.fetch_areas:
-        for name in fetch_area_tree(args.mbdump):
+    if args.fetch:
+        for name in fetch_area_tree(args.mbdump) + fetch_release_dates(args.mbdump):
             print(f"saved {name}")
     shows = read_shows(args.shows)
     conn, tmp = open_graph(Path(args.graph))
@@ -964,8 +1109,9 @@ def main(argv=None) -> None:
         assign_nearby(shows, metros, args.nearby_km)
         claimed = set().union(*(m.city_keys | m.nearby for m in metros))
         homes = home_cities(shows, graph, areas)
+        years = read_years(args.mbdump, set(graph.nodes))
         cities = [find(shows, graph, m, extra_areas=tuple(args.area), lastfm=lastfm, min_size=args.min_size,
-                       resolution=args.resolution, homes=homes, claimed=claimed)
+                       resolution=args.resolution, homes=homes, claimed=claimed, years=years)
                   for m in (metros if args.all else metros[:1])]
     finally:
         conn.close()

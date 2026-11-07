@@ -361,3 +361,67 @@ def test_fetch_area_tree(tmp_path, monkeypatch):
     assert (d / "l_area_area").read_text() == "1\t2\t3\t4\n" and not (d / "artist").exists()
     assert urls[1].endswith("/20261104-001001/mbdump.tar.bz2")
     assert fs.fetch_area_tree(d) == []                  # nothing to do the second time
+
+
+@pytest.fixture
+def era_dump(tmp_path):
+    """The MusicBrainz tables read_years reads: a band formed in 1985 and dissolved in 1994, a member who
+    joined in 1987, and a solo artist with releases from 1989 to 2010."""
+    d = tmp_path / "era"
+    d.mkdir()
+    N = "\\N"
+
+    def artist(rid, mbid, typ, begin=N, end=N):
+        return "\t".join([rid, mbid, mbid, mbid, begin, N, N, end, N, N, typ, N, N, "", "0", "", "f"])
+    (d / "artist").write_text("\n".join([artist("1", "g1", "2", "1985", "1994"), artist("2", "p1", "1"),
+                                         artist("3", "p2", "1"), artist("4", "other", "1")]) + "\n")
+    (d / "artist_credit_name").write_text("10\t0\t1\tG\t\n11\t0\t3\tP2\t\n12\t0\t1\tG\t & \n12\t1\t3\tP2\t\n")
+    (d / "release_group").write_text("".join(f"{i}\tgid{i}\tname\t{ac}\t1\t\t0\t\n"
+                                             for i, ac in ((1, 10), (2, 11), (3, 11), (4, 11), (5, 12))))
+    (d / "release_group_meta").write_text(f"1\t1\t1988\t1\t1\t{N}\t{N}\n2\t1\t1990\t{N}\t{N}\t{N}\t{N}\n"
+                                          f"3\t1\t1991\t{N}\t{N}\t{N}\t{N}\n4\t1\t2010\t{N}\t{N}\t{N}\t{N}\n"
+                                          f"5\t1\t1989\t{N}\t{N}\t{N}\t{N}\n")
+    (d / "link_type").write_text(f"103\t{N}\t0\tgid\tartist\tartist\tmember of band\t\n")
+    (d / "link").write_text(f"500\t103\t1987\t{N}\t{N}\t{N}\t{N}\t{N}\t0\t\tf\n")
+    (d / "l_artist_artist").write_text("1\t500\t2\t1\t0\t\t0\t\t\n")
+    return d
+
+
+def test_years_and_era(era_dump, tmp_path):
+    years = fs.read_years(era_dump, {"g1", "p1", "p2"})
+    assert years.span["g1"] == (1985, 1994)          # formed and dissolved
+    assert years.span["p1"] == (1987, 1987)          # only a dated membership
+    assert years.span["p2"] == (1989, 2010)          # its releases (10th to 90th percentile)
+    assert years.member == {("p1", "g1"): (1987, None)} and "other" not in years.span
+    era = fs.era_of({"g1", "p1", "p2"}, years, Counter({"g1": 6, "p1": 3, "p2": 1}))
+    assert (era["from"], era["to"], era["peak"], era["label"]) == (1985, 1987, 1987, "1985–1987")
+    assert era["decades"] == {"1980s": 1.0} and era["dated_artists"] == 3
+    assert fs.era_of({"other"}, years, Counter()) is None
+    assert fs.read_years(tmp_path / "nowhere", set()) is None
+
+
+def test_names_with_era():
+    used = Counter()
+    assert fs._name("Seattle", ["grunge"], used, "1985–1992") == "Seattle grunge"
+    assert fs._name("Seattle", ["grunge", "punk"], used, "1995–2003") == "Seattle grunge (1995–2003)"
+    assert fs._name("Seattle", ["grunge"], used, "1995–2003") == "Seattle grunge 2"
+
+
+def test_fetch_release_dates(tmp_path, monkeypatch):
+    import io
+    import tarfile
+    import urllib.request
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:bz2") as tar:
+        for name, data in (("mbdump/artist_tag", b"x\n"), ("mbdump/release_group_meta", b"1\t1\t1988\n")):
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+    urls = []
+
+    def fake_urlopen(req, timeout=None):
+        urls.append(req.full_url)
+        return io.BytesIO(b"20261104-001001\n" if req.full_url.endswith("LATEST") else buf.getvalue())
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    assert fs.fetch_release_dates(tmp_path) == ["mbdump/release_group_meta"]
+    assert urls[1].endswith("/mbdump-derived.tar.bz2") and (tmp_path / "release_group_meta").exists()
