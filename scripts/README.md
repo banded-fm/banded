@@ -64,8 +64,8 @@ Writes `scripts/data/scenes/scenes.json` (`--all`) or `<city>.json`
 # in banded-data: every act on every show, with the venue's city and coordinates
 .venv/bin/concertdb export shows --musicbrainz-only     # data/export/shows.csv
 # here
-python3 scripts/find_scenes.py --all --fetch-areas       # once: MusicBrainz's area tree (~2 GB streamed)
-python3 scripts/find_scenes.py --all                     # every city with 1,000+ shows (~3 min)
+python3 scripts/find_scenes.py --all --fetch             # once: area tree + release dates (~3 GB streamed)
+python3 scripts/find_scenes.py --all                     # every city with 1,000+ shows (~4 min)
 python3 scripts/find_scenes.py --all --lastfm ~/Downloads/archive.zip   # + Last.fm tags
 python3 scripts/find_scenes.py --city "Los Angeles" --area "Orange County"
 python3 scripts/find_scenes.py --city "Portland, Maine"
@@ -74,10 +74,10 @@ python3 -m pytest scripts/test_find_scenes.py            # offline tests
 
 Defaults: the shows export from `$CONCERTDB_SHOWS`, else
 `~/banded-data/data/export/shows.csv`; the graph from `public/graph.db.gz`;
-MusicBrainz's area tree from `scripts/data/mbdump` (`artist`, `area`, `link`,
-`link_type` from `process_mb_dump.py`, and `l_area_area`, which
-`--fetch-areas` streams from the latest full dump; without it areas are
-matched by name); Last.fm from `$LASTFM_ARTISTS` (optional: the Kaggle "Music
+MusicBrainz tables from `scripts/data/mbdump`: those `process_mb_dump.py`
+keeps, plus `l_area_area` (the area tree) and `release_group_meta` (release
+dates), which `--fetch` streams from the latest dumps (without them, areas are
+matched by name and scenes get no era); Last.fm from `$LASTFM_ARTISTS` (optional: the Kaggle "Music
 artists popularity" dataset, 2019, keyed by MusicBrainz ID; not committed).
 
 How it works (details in the script's docstring):
@@ -117,9 +117,15 @@ How it works (details in the script's docstring):
 8. **Location**: the venue nearest all the others where the scene's artists
    shared bills or played; else the place most of them come from; else the
    city centre.
+9. **Era**: when the scene's artists started out (first release, year formed,
+   or first dated band membership), weighted by their ties inside the scene,
+   20th to 80th percentile, with a peak: Seattle grunge 1985–1992, Liverpool
+   merseybeat 1959–1963, Detroit techno 1991–2001. A name a bigger scene took
+   gets its era instead of a number: "Detroit techno (1987–1998)" for Derrick
+   May's circle next to Underground Resistance's.
 
 November 2026 (`--all --lastfm`): 80 cities, 2,917 scenes, 110,473 of 144,926
-local artists in one. Seattle: 2,354 local artists (864 by area, 108 nearby,
+local artists in one; 2,915 have an era. Seattle: 2,354 local artists (864 by area, 108 nearby,
 1,032 through their bands, 343 by ties), 1,927 in 55 scenes: Nirvana, the
 Melvins and Kurt Cobain together (Aberdeen), Mudhoney's, Soundgarden and
 Pearl Jam's with Green River and Mother Love Bone, Alice in Chains', and
@@ -128,12 +134,14 @@ Olympia's riot grrrl (Bikini Kill, Beat Happening).
 Each city in the JSON has `id`, `city`, `state`, `country`, `centre`,
 `radius_km`, `places`, `shows`, `local_artists`, `local_by`, `in_scenes` and
 `scenes`; each scene has `id`, `name`, `size`, `location` (`lat`, `lon`,
-`place`, `venue`, `source`, `spread_km`, top `venues`), `top_genres`,
+`place`, `venue`, `source`, `spread_km`, top `venues`), `era` (`from`, `to`,
+`peak`, `label`, `decades`, `dated_artists`), `top_genres`,
 `distinctive_genres` (share, lift), `places`, `lastfm` (`top_tags`,
 `distinctive_tags`, `place_tags`, `most_listened`) and `artists` (`id`,
 `name`, `type`, `links`, `local`).
 
-Limits: no sense of era yet; an artist is in one scene at most; an area that
+Limits: an era describes a scene but doesn't split one that spans
+generations; an artist is in one scene at most; an area that
 is only a country or state gives no city; towns over 150 km out (Ellensburg,
 Screaming Trees) count for no metro.
 
