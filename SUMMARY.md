@@ -43,7 +43,8 @@ Data pipeline (offline, run manually):
     banded-data shows export (`concertdb export shows --musicbrainz-only`) + graph.db.gz
         → scripts/find_scenes.py (on demand): music scenes in every city with 1,000+ shows
           (or one --city), each with a suggested name, a location, genres and optional
-          Last.fm tags → scripts/data/scenes/scenes.json (not used by the app yet)
+          Last.fm tags; artists placed by MusicBrainz's area tree, nearby towns, their
+          bands and their ties → scripts/data/scenes/scenes.json (not used by the app yet)
 
 App loading (lazy, non-blocking):
     UI renders immediately; main.tsx calls preloadDb() once the browser is idle
