@@ -40,6 +40,10 @@ Data pipeline (offline, run manually):
         → scripts/add_concertdb_edges.py adds opener → headliner "opened_for" edges
           (same pairs as `concertdb export --musicbrainz-only`), adding acts that
           aren't in the graph as nodes; re-runnable, replaces its previous edges
+    banded-data shows export (`concertdb export shows --musicbrainz-only`) + graph.db.gz
+        → scripts/find_scenes.py (on demand): music scenes in every city with 1,000+ shows
+          (or one --city), each with a suggested name, a location, genres and optional
+          Last.fm tags → scripts/data/scenes/scenes.json (not used by the app yet)
 
 App loading (lazy, non-blocking):
     UI renders immediately; main.tsx calls preloadDb() once the browser is idle
@@ -305,6 +309,10 @@ scripts/
 │                           shared with seed_supabase.py.
 ├── add_concertdb_edges.py — Adds "opened_for" edges (opener → headliner) to graph.db.gz from the
 │                           banded-data ledger. Run after process_mb_dump.py.
+├── find_scenes.py        — On demand: music scenes in every major city (--all) or one (--city): Louvain
+│                           groups of its artists by band ties, credits and shared bills; genres and
+│                           Last.fm tags for naming; placed at their central venue → scripts/data/scenes/.
+│                           Tests: test_find_scenes.py (pytest).
 ├── seed_supabase.py      — Seeds Supabase Postgres with the same artists and edges, uncut (--dry-run counts rows).
 ├── crawl_setlistfm.py    — Daily crawl job for Setlist.fm venue data.
 └── README.md             — Script documentation.
@@ -407,7 +415,7 @@ CREATE TABLE graph_meta_added_nodes (value TEXT PRIMARY KEY); -- acts it added (
 - **Game valid moves**: Scrollable list of all valid connections from current node. Sorted by relationship priority (members → former → support). Filter by typing. No revisiting. Undo support.
 - **Par scoring**: Par = shortest path node count. Re-rolls if < 3 hops.
 - **Seed artists**: 148 recognizable artists (persons + iconic bands) at 6 hops, the game's puzzle endpoints; plus banded-data's artists (see "Seeds and size budget"). Listed once, in `src/game/artists.ts`, by MusicBrainz ID with the name for readability: names are ambiguous (several "Lemmy"s, five "Nirvana"s) or change ("Kanye West" is "Ye" on MusicBrainz), and the build used to pick an arbitrary namesake. The game resolves them by ID too; a seed missing from the dump is reported by the build.
-- **Concert ties from banded-data**: `scripts/add_concertdb_edges.py` reads the banded-data ledger (read-only; data flows one way, banded-data never reads the graph) and adds one `opened_for` edge per (opener, headliner) pair: both matched to MusicBrainz, not a festival, not cancelled, billing confidence ≥ 0.4. Every act in these pairs has a concert, so the build's banded-data seeds already put it in the graph; an act missing from an older or trimmed graph is added as a node (name, type, disambiguation; no area). `graphDb.getNeighbors` reports each edge's direction (`outgoing`) so Explore draws opener → headliner; Similarity weighs `opened_for` at 0.45 (placeholder, below band ties, above a single album credit) and labels "opened for / headlined". The game ignores it (it uses band relationships only). Postgres (`graph-neighbors`) doesn't have these edges yet.
+- **Concert ties from banded-data**: `scripts/add_concertdb_edges.py` reads the banded-data ledger (read-only; data flows one way, banded-data never reads the graph) and adds one `opened_for` edge per (opener, headliner) pair: both matched to MusicBrainz, not a festival, not cancelled, billing confidence ≥ 0.4. Every act in these pairs has a concert, so the build's banded-data seeds already put it in the graph; an act missing from an older or trimmed graph is added as a node (name, type, disambiguation; no area). `graphDb.getNeighbors` reports each edge's direction (`outgoing`) so Explore draws opener → headliner; Similarity weighs `opened_for` at 0.45 (placeholder, below band ties, above a single album credit) and labels "opened for / headlined". The game counts it as a move like every other link. Postgres (`graph-neighbors`) doesn't have these edges yet.
 - **Same-type pairs**: Game always pairs person↔person or group↔group.
 - **Vite base (host-aware)**: `vite.config.ts` sets `base` by precedence: explicit `DEPLOY_BASE` env var → Cloudflare build (`WORKERS_CI` from Workers Builds, or `CF_PAGES` from Pages) → `/` → GitHub Pages production default `/Banded/` → dev `/`. Cloudflare serves at the domain root, so the GitHub Pages base there causes a blank page (404'd assets) — hence the auto-detection. It also inlines the R2 graph URL on Cloudflare builds (see `__GRAPH_DB_CDN_URL__`), since static-assets-only Workers can't hold env vars.
 - **graph.db.gz loader (local-first, CDN fallback)**: `graphDb.ts` tries the same-origin committed file first, then falls back to the CDN URL (`VITE_GRAPH_DB_URL` or the build-time `__GRAPH_DB_CDN_URL__`) if the local file is missing/HTML-fallback. On Cloudflare the local file is excluded from upload via `public/.assetsignore` (25 MiB asset cap), so it loads from R2.
