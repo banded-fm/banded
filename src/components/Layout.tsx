@@ -9,11 +9,13 @@ const NAV_ITEMS = [
   { to: "/similarity", label: "Similarity" },
   { to: "/about", label: "About" },
 ];
+// Pages reachable by URL but not listed in the menu yet (in development).
+const HIDDEN_ITEMS = [{ to: "/scenes", label: "Scenes" }];
 
 export function Layout() {
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
-  const current = NAV_ITEMS.find((item) => item.to === location.pathname);
+  const current = [...NAV_ITEMS, ...HIDDEN_ITEMS].find((item) => item.to === location.pathname);
 
   // Close the mobile menu after navigating
   useEffect(() => {

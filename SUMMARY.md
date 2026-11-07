@@ -45,7 +45,8 @@ Data pipeline (offline, run manually):
           (or one --city), each with a suggested name, a location, genres and optional
           Last.fm tags; artists placed by MusicBrainz's area tree, nearby towns, their
           bands and their ties; an era from when its artists started
-          → scripts/data/scenes/scenes.json (not used by the app yet)
+          → scripts/data/scenes/scenes.json; --app writes public/scenes.json for the Scenes map
+          (gitignored; npm run upload-scenes → cdn.banded.fm/scenes.json)
 
 App loading (lazy, non-blocking):
     UI renders immediately; main.tsx calls preloadDb() once the browser is idle
@@ -264,6 +265,9 @@ src/
 │   │                       Async prepareArtists() prefetch + sync build() facade. Used by Similarity + Concerts.
 │   ├── searchResolution.ts — Pure logic: resolve an Explore search by MBID (just-clicked node) or by name.
 │   └── AboutPage.tsx     — Project info, data source credits, GitHub link.
+│   └── ScenesPage.tsx     — In development (#/scenes, not in the menu): the scenes from scripts/find_scenes.py on a
+│                            world map (scenes/world-low.svg, -high.svg zoomed in), a bubble per city; a city's scenes as dots,
+│                            coloured by era; pan/zoom/pinch; filter by text and decade; ?scene=<id>.
 ├── components/
 │   ├── ArtistAutocomplete.tsx — Artist input + dropdown (keyboard, ARIA combobox, 44px rows on phones).
 │   │                       Used by SearchBar, Discover, Similarity and Play's custom game.
