@@ -138,6 +138,13 @@ input {
   cursor: default;
 }
 
+/* A page not in the menu yet: its name and badge show in the bar on every screen size. */
+.nav-current-shown {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 0.4rem;
+}
+
 @media (max-width: 640px) {
   /* Explore legend: 44px tap targets */
   .graph-legend .graph-legend-row {
@@ -335,10 +342,11 @@ input {
 }
 .scene-panel {
   position: absolute;
-  top: 0.75rem;
+  /* Below the filters when they're open (--filters-h), clear of the filter and zoom buttons below it */
+  top: calc(0.75rem + var(--filters-h, 0px));
   right: 0.75rem;
   width: 340px;
-  max-height: calc(100% - 1.5rem - 110px); /* clear of the zoom buttons below it */
+  max-height: calc(100% - 1.5rem - 162px - var(--filters-h, 0px));
   border-radius: 12px;
 }
 .scenes-zoom {
@@ -348,13 +356,13 @@ input {
 }
 .scenes-close {
   position: absolute;
-  top: 0.75rem;
+  top: calc(0.75rem + var(--filters-h, 0px));
   right: 0.75rem;
 }
 /* With a city open, the scene card starts below its close button. */
 .scenes-map.city-open .scene-panel {
-  top: calc(0.75rem + 52px);
-  max-height: calc(100% - 1.5rem - 110px - 52px);
+  top: calc(0.75rem + 52px + var(--filters-h, 0px));
+  max-height: calc(100% - 1.5rem - 162px - 52px - var(--filters-h, 0px));
 }
 @media (max-width: 640px) {
   .scene-panel {
