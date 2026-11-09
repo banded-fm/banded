@@ -38,27 +38,30 @@ export interface ScenesData {
   cities: SceneCity[];
 }
 
-/** A scene with its city; `slot` is its place among scenes centred on the same point (0 = the first). */
+/** A scene with its city. */
 export interface PlacedScene extends Scene {
   cityId: string;
   city: string;
   country: string | null;
   lat: number;
   lon: number;
-  slot: number;
 }
 
-/** Decade buckets for the filter and the colours: before 1960, the 60s ... the 00s, 2010 on. */
+const GREY = [128, 128, 128];
+const GREEN = [46, 204, 113];
+/** A colour from grey (t = 0) to green (t = 1). */
+export function eraGradient(t: number): string {
+  const c = GREY.map((g, i) => Math.round(g + (GREEN[i]! - g) * Math.min(1, Math.max(0, t))));
+  return `#${c.map((x) => x.toString(16).padStart(2, "0")).join("")}`;
+}
+
+/** Decade buckets for the filter and the colours: before 1960, the 60s ... the 00s, 2010 on; grey (oldest) to
+ * green (newest). */
 export const DECADES: { start: number; label: string; color: string }[] = [
-  { start: 1950, label: "Before 1960", color: "#a29bfe" },
-  { start: 1960, label: "1960s", color: "#48dbfb" },
-  { start: 1970, label: "1970s", color: "#1dd1a1" },
-  { start: 1980, label: "1980s", color: "#feca57" },
-  { start: 1990, label: "1990s", color: "#ff9f43" },
-  { start: 2000, label: "2000s", color: "#ff6b6b" },
-  { start: 2010, label: "2010 on", color: "#f368e0" },
-];
-const NO_ERA_COLOR = "#888";
+  [1950, "Before 1960"], [1960, "1960s"], [1970, "1970s"], [1980, "1980s"], [1990, "1990s"], [2000, "2000s"],
+  [2010, "2010 on"],
+].map(([start, label], i, all) => ({ start: start as number, label: label as string, color: eraGradient(i / (all.length - 1)) }));
+const NO_ERA_COLOR = "#4a4a4a";
 
 /** The decade bucket of a scene's peak year, or null without an era. */
 export function decadeOf(scene: Scene): number | null {
@@ -75,62 +78,104 @@ export function colorFor(scene: Scene): string {
   return decadeColor(decadeOf(scene));
 }
 
-/** Marker radius in screen pixels: grows with the scene's size, 5 to 16. */
-export function radiusFor(size: number): number {
-  return Math.round(Math.min(16, 4 + Math.sqrt(size) * 0.6));
+/** Every scene, with its city. */
+export function placeScenes(data: ScenesData): PlacedScene[] {
+  return data.cities.flatMap((c) =>
+    c.scenes.map((s) => ({ ...s, cityId: c.id, city: c.city, country: c.country, lat: s.location.lat, lon: s.location.lon })));
 }
 
+/** The screen around an open city, in pixels from it (left and top negative). */
+export interface Room { left: number; right: number; top: number; bottom: number }
+
+/** A city's name on the map: where it goes from the city's dot, in screen pixels, and how it's aligned there. */
+export interface CityLabel { dx: number; dy: number; anchor: "start" | "middle" | "end" }
+
 /**
- * Every scene, with its city. Several scenes are often centred on the same
- * venue: each gets a slot (0, 1, 2 ...) in the order of the file, and the map
- * sets slots 1, 2 ... around the point on a spiral (spiral()).
+ * Names for the cities on screen, biggest (most scenes) first: each goes below its dot, or else to its right,
+ * left or above, wherever it overlaps no other name or dot; a city with no such spot goes unnamed until zoomed in.
+ * Positions are screen pixels; `width` is the name's width there, `dot` the dot's radius.
  */
-export function placeScenes(data: ScenesData): PlacedScene[] {
-  const seen = new Map<string, number>();
-  const out: PlacedScene[] = [];
-  for (const c of data.cities) {
-    for (const s of c.scenes) {
-      const key = `${s.location.lat.toFixed(4)},${s.location.lon.toFixed(4)}`;
-      const slot = seen.get(key) ?? 0;
-      seen.set(key, slot + 1);
-      out.push({ ...s, cityId: c.id, city: c.city, country: c.country, lat: s.location.lat, lon: s.location.lon, slot });
+export function labelCities(
+  cities: { id: string; x: number; y: number; count: number; width: number }[], dot: number, height = 13,
+): Map<string, CityLabel> {
+  type Box = [number, number, number, number];
+  const hit = (a: Box, b: Box) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
+  const dots: Box[] = cities.map((c) => [c.x - dot, c.y - dot, c.x + dot, c.y + dot]);
+  const names: Box[] = [];
+  const out = new Map<string, CityLabel>();
+  const order = cities.map((_, i) => i).sort((a, b) =>
+    cities[b]!.count - cities[a]!.count || cities[a]!.id.localeCompare(cities[b]!.id));
+  for (const i of order) {
+    const c = cities[i]!, w = c.width, g = 3;
+    const spots: [CityLabel, Box][] = [
+      [{ dx: 0, dy: dot + g + height / 2, anchor: "middle" }, [c.x - w / 2, c.y + dot + g, c.x + w / 2, c.y + dot + g + height]],
+      [{ dx: dot + g, dy: 0, anchor: "start" }, [c.x + dot + g, c.y - height / 2, c.x + dot + g + w, c.y + height / 2]],
+      [{ dx: -dot - g, dy: 0, anchor: "end" }, [c.x - dot - g - w, c.y - height / 2, c.x - dot - g, c.y + height / 2]],
+      [{ dx: 0, dy: -dot - g - height / 2, anchor: "middle" }, [c.x - w / 2, c.y - dot - g - height, c.x + w / 2, c.y - dot - g]],
+    ];
+    const spot = spots.find(([, box]) => !names.some((n) => hit(n, box)) && !dots.some((d, j) => j !== i && hit(d, box)));
+    if (!spot) continue;
+    names.push(spot[1]);
+    out.set(c.id, spot[0]);
+  }
+  return out;
+}
+
+/** A scattered scene: its offset from the city in screen pixels, and which side of its dot its name goes. */
+export interface Scattered<T> { scene: T; dx: number; dy: number; side: "left" | "right" }
+
+const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
+
+/**
+ * An open city's scenes scattered around it, each with its name written level beside its dot: the biggest
+ * scenes nearest the city. Offsets are in screen pixels. Each scene takes the nearest free spot on a sunflower
+ * spiral (which looks scattered but fills evenly), stretched to the shape of the room, where neither its dot nor
+ * its name overlaps another's or the city's own name, and inside the room while there's space there. Names go on
+ * the side away from the city. `labelWidth` gives a scene's name width in pixels; `cityWidth` the city name's;
+ * `room` the screen around the city, in pixels from it; `avoid` places on it to keep clear (buttons over the map).
+ */
+export function scatterLayout<T extends Scene>(
+  scenes: T[], labelWidth: (scene: T) => number, cityWidth: number,
+  room: Room = { left: -400, right: 400, top: -300, bottom: 300 }, avoid: Room[] = [],
+): Scattered<T>[] {
+  const DOT = 9, GAP = 4, ROW = 18, MIN_R = 34, STEP = 7;
+  type Box = [number, number, number, number];
+  const hit = (a: Box, b: Box) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
+  // The city's dot and, above it, its name.
+  const taken: Box[] = [[-cityWidth / 2 - GAP, -34, cityWidth / 2 + GAP, DOT + GAP]];
+  const keepClear: Box[] = avoid.map((a) => [a.left, a.top, a.right, a.bottom]);
+  const aspect = (room.right - room.left) / Math.max(1, room.bottom - room.top);
+  const sx = Math.sqrt(Math.max(0.4, Math.min(3, aspect))), sy = 1 / sx;
+  // Past this, no spot is inside the room.
+  const far = Math.hypot(Math.max(-room.left, room.right) / sx, Math.max(-room.top, room.bottom) / sy) + MIN_R;
+  const inside = (b: Box) => b[0] >= room.left && b[2] <= room.right && b[1] >= room.top && b[3] <= room.bottom;
+  const ordered = [...scenes].sort((a, b) => b.size - a.size || a.name.localeCompare(b.name));
+  const out: Scattered<T>[] = [];
+  for (const scene of ordered) {
+    const w = labelWidth(scene);
+    // First a spot inside the room; once there's none, anywhere.
+    let fit = true;
+    for (let i = 0; ; i++) {
+      const rho = MIN_R + STEP * Math.sqrt(i);
+      if (fit && rho > far) { fit = false; i = -1; continue; }
+      const t = i * GOLDEN_ANGLE;
+      const dx = rho * sx * Math.cos(t), dy = rho * sy * Math.sin(t);
+      const side = dx < 0 ? "left" : "right";
+      const box: Box = side === "right"
+        ? [dx - DOT - GAP, dy - ROW / 2, dx + DOT + GAP + w, dy + ROW / 2]
+        : [dx - DOT - GAP - w, dy - ROW / 2, dx + DOT + GAP, dy + ROW / 2];
+      if ((fit && (!inside(box) || keepClear.some((b) => hit(b, box)))) || (taken.some((b) => hit(b, box)) && i < 200000)) continue;
+      taken.push(box);
+      out.push({ scene, dx, dy, side });
+      break;
     }
   }
   return out;
 }
 
-const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
-/** Offset of a slot on a sunflower spiral, `spacing` apart: slot 0 stays on the point. */
-export function spiral(slot: number, spacing: number): [number, number] {
-  if (slot === 0) return [0, 0];
-  const r = spacing * Math.sqrt(slot);
-  return [r * Math.cos(slot * GOLDEN_ANGLE), r * Math.sin(slot * GOLDEN_ANGLE)];
-}
-
-/**
- * Push overlapping dots apart (in place) so each can be tapped: centres end at least `minDist` apart, or the
- * sum of their radii plus `gap`, whichever is more. A few rounds of pairwise nudges: dots stay near where they
- * started, so a city's scenes keep roughly to their venues.
- */
-export function separate(dots: { x: number; y: number; r: number }[], minDist: number, gap: number, rounds = 80): void {
-  for (let round = 0; round < rounds; round++) {
-    let moved = false;
-    for (let i = 0; i < dots.length; i++) {
-      for (let j = i + 1; j < dots.length; j++) {
-        const a = dots[i]!, b = dots[j]!;
-        const need = Math.max(minDist, a.r + b.r + gap);
-        let dx = b.x - a.x, dy = b.y - a.y;
-        let d = Math.hypot(dx, dy);
-        if (d >= need) continue;
-        if (d < 1e-9) { dx = Math.cos(j); dy = Math.sin(j); d = 1; }     // on top of each other: any direction
-        const push = (need - d) / 2;
-        a.x -= (dx / d) * push; a.y -= (dy / d) * push;
-        b.x += (dx / d) * push; b.y += (dy / d) * push;
-        moved = true;
-      }
-    }
-    if (!moved) return;
-  }
+/** A scene's name without its city in front ("Los Angeles punk" -> "punk") for labels around that city. */
+export function shortName(name: string, city: string): string {
+  return name.startsWith(`${city} `) ? name.slice(city.length + 1) : name;
 }
 
 // ---------------------------------------------------------------- the world map
@@ -179,11 +224,6 @@ export function cityBubbles(scenes: PlacedScene[], centres: Map<string, { lat: n
   return [...byCity.values()].map(({ b, weights }) => ({
     ...b, decade: [...weights.entries()].sort((x, y) => y[1] - x[1])[0]?.[0] ?? null,
   })).sort((a, b) => b.count - a.count);
-}
-
-/** Bubble radius in screen pixels by number of scenes: 4 to 15. */
-export function bubbleRadius(count: number): number {
-  return Math.round(Math.min(15, 3 + Math.sqrt(count) * 1.1));
 }
 
 /** The visible part of the map: its centre (map units) and zoom (1 = the whole world fits). */
@@ -238,14 +278,20 @@ export function matches(scene: PlacedScene, query: string): boolean {
   );
 }
 
-/** The scenes to draw: those matching the text, in the decade (if one is picked). */
-export function filterScenes(scenes: PlacedScene[], query: string, decade: number | null): PlacedScene[] {
-  return scenes.filter((s) => (decade === null || decadeOf(s) === decade) && matches(s, query));
+/** The scenes to draw: those matching the text, in one of the picked decades. No decade picked is all of them. */
+export function filterScenes(scenes: PlacedScene[], query: string, decades: ReadonlySet<number>): PlacedScene[] {
+  return scenes.filter((s) => {
+    if (decades.size > 0) {
+      const d = decadeOf(s);
+      if (d === null || !decades.has(d)) return false;
+    }
+    return matches(s, query);
+  });
 }
 
-/** Cities by number of scenes, for the "jump to" list. */
-export function citiesBySize(data: ScenesData): SceneCity[] {
-  return [...data.cities].filter((c) => c.scenes.length > 0).sort((a, b) => b.scenes.length - a.scenes.length);
+/** Cities with scenes, A to Z, for the "Go to a city" list. */
+export function citiesByName(data: ScenesData): SceneCity[] {
+  return data.cities.filter((c) => c.scenes.length > 0).sort((a, b) => a.city.localeCompare(b.city));
 }
 
 /**
