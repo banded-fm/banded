@@ -14,7 +14,8 @@ import {
  * by lines, biggest nearest, with their names. A tap anywhere else
  * closes it (the map stays where it is). Colours run from grey
  * (oldest era) to green (newest). Tap a scene for its era, genres and
- * artists; ?scene=<id> opens one.
+ * artists; ?scene=<id> opens one. The filters (text, city, eras) are hidden
+ * until the filter button above the zoom buttons is on.
  */
 const paths = (svg: string) => svg.replace(/^[\s\S]*?<svg[^>]*>/, "").replace(/<\/svg>\s*$/, "");
 // The world in two levels of detail: a light outline zoomed out (in this chunk), and a detailed one, loaded when
@@ -36,6 +37,19 @@ export function ScenesPage() {
   // Era toggles; none picked means every era.
   const [decades, setDecades] = useState<ReadonlySet<number>>(new Set());
   const [view, setView] = useState<View>(HOME);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  // The filters lie over the top of the map (so opening them doesn't move it); their height, while open.
+  const filtersRef = useRef<HTMLDivElement>(null);
+  const [filtersH, setFiltersH] = useState(0);
+  useLayoutEffect(() => {
+    const el = filtersRef.current;
+    if (!filtersOpen || !el) { setFiltersH(0); return; }
+    const measure = () => setFiltersH(el.offsetHeight);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [filtersOpen]);
   // The open city, the map units per screen pixel when it opened (its scenes are laid out in pixels at that zoom:
   // zooming in spreads them apart, zooming out hides their names), and the screen around it then.
   const [open, setOpen] = useState<{ id: string; upp: number; room: Room; avoid: Room[] } | null>(null);
@@ -75,7 +89,12 @@ export function ScenesPage() {
   const vb = viewBox(view, size.w, size.h);
   const upp = vb.unitsPerPx;
 
-  const select = (id: string | null) => setParams(id ? { scene: id } : {}, { replace: true });
+  const select = (id: string | null) => {
+    // On a phone a scene's sheet and the filters together would leave almost no map: the filters close (they
+    // still apply).
+    if (id && window.matchMedia("(max-width: 640px)").matches) setFiltersOpen(false);
+    setParams(id ? { scene: id } : {}, { replace: true });
+  };
 
   /**
    * Open a city: centre it at CITY_ZOOM (or closer, if already closer) with its scenes scattered around it, spread
@@ -91,26 +110,28 @@ export function ScenesPage() {
     const sheet = phone && withSheet;
     // Around the city on screen: above a phone's sheet (the city a quarter of the way down), clear of the hint.
     const room: Room = sheet
-      ? { left: -size.w / 2 + 6, right: size.w / 2 - 6, top: -size.h / 4 + 6, bottom: size.h * 0.2 }
-      : { left: -size.w / 2 + 6, right: size.w / 2 - 6, top: -size.h / 2 + 6, bottom: size.h / 2 - 30 };
-    // Clear of the zoom buttons (bottom right; above a phone's sheet) and the close button (top right), measured
-    // from the city.
-    const ox = size.w / 2, oy = sheet ? size.h / 4 : size.h / 2;
+      ? { left: -size.w / 2 + 6, right: size.w / 2 - 6, top: -size.h / 4 + filtersH + 6, bottom: size.h * 0.2 }
+      : { left: -size.w / 2 + 6, right: size.w / 2 - 6, top: -(size.h - filtersH) / 2 + 6, bottom: (size.h - filtersH) / 2 - 30 };
+    // Clear of the filter and zoom buttons (bottom right; above a phone's sheet) and the close button (top right),
+    // measured from the city.
+    // The city goes in the middle of what's visible: below the filters, if open.
+    const ox = size.w / 2, oy = sheet ? size.h / 4 : (size.h + filtersH) / 2;
     const zoomBottom = sheet ? size.h * 0.45 : size.h;
     const avoid: Room[] = [
-      { left: size.w - 64 - ox, right: size.w - ox, top: zoomBottom - 110 - oy, bottom: zoomBottom - oy },
-      { left: size.w - 64 - ox, right: size.w - ox, top: -oy, bottom: 64 - oy },
+      { left: size.w - 64 - ox, right: size.w - ox, top: zoomBottom - 162 - oy, bottom: zoomBottom - oy },
+      { left: size.w - 64 - ox, right: size.w - ox, top: filtersH - oy, bottom: filtersH + 64 - oy },
     ];
     setOpen({ id: cityId, upp: next.unitsPerPx, room, avoid });
-    setView({ cx: x, cy: sheet ? y + next.h * 0.25 : y, k });
-  }, [data, view.k, size]);
+    setView({ cx: x, cy: sheet ? y + next.h * 0.25 : y - (filtersH / 2) * next.unitsPerPx, k });
+  }, [data, view.k, size, filtersH]);
 
-  // A scene in the link (?scene=...) opens its city, once, when the data arrives.
+  // A scene in the link (?scene=...) opens its city, once, when the data arrives. Only then: a scene picked later
+  // is in a city that's already open, and reopening it would lay its scenes out again.
   useEffect(() => {
-    if (centred.current || !selected || size.w < 10) return;
+    if (centred.current || !data || size.w < 10) return;
     centred.current = true;
-    openCityAt(selected.cityId, true);
-  }, [selected, openCityAt, size.w]);
+    if (selected) openCityAt(selected.cityId, true);
+  }, [data, selected, openCityAt, size.w]);
 
   // ---- pan and zoom: drag, pinch, wheel, double-click, buttons
   // While a finger or the wheel is moving, the map isn't redrawn: the whole SVG is moved and scaled with a CSS
@@ -262,19 +283,27 @@ export function ScenesPage() {
   // ---- what to draw: a dot per city; the open city in the middle of its scattered scenes
   const openCity_ = data?.cities.find((c) => c.id === openCityId) ?? null;
   const centre = openCity_ ? project(openCity_.centre.lat, openCity_.centre.lon) : null;
-  const around = useMemo(() => {
+  // Laid out once when the city opens, from all its scenes, so nothing moves while it's open: selecting a scene or
+  // changing the filters only shows or hides scenes in their places.
+  const layout = useMemo(() => {
     if (!open || !centre || !openCity_) return [];
     const width = textWidth(svgRef.current);
-    return scatterLayout(shown.filter((s) => s.cityId === open.id),
-      (s) => width(shortName(s.name, s.city), LABEL_PX, true), width(openCity_.city, CITY_LABEL_PX, true), open.room, open.avoid)
-      .map(({ scene, dx, dy, side }) => ({ s: scene, x: centre[0] + dx * open.upp, y: centre[1] + dy * open.upp, side }));
-  }, [shown, open, openCity_, centre?.[0], centre?.[1]]); // eslint-disable-line react-hooks/exhaustive-deps
+    const nameWidth = (s: PlacedScene) => width(shortName(s.name, s.city), LABEL_PX, true);
+    return scatterLayout(placed.filter((s) => s.cityId === open.id),
+      nameWidth, width(openCity_.city, CITY_LABEL_PX, true), open.room, open.avoid)
+      .map(({ scene, dx, dy, side }) =>
+        ({ s: scene, x: centre[0] + dx * open.upp, y: centre[1] + dy * open.upp, side, w: nameWidth(scene) }));
+  }, [placed, open, openCity_, centre?.[0], centre?.[1]]); // eslint-disable-line react-hooks/exhaustive-deps
+  const around = useMemo(() => {
+    const ids = new Set(shown.map((s) => s.id));
+    return layout.filter((a) => ids.has(a.s.id));
+  }, [layout, shown]);
   // Names at the zoom the city opened at or closer; zoomed further out they'd overlap.
   const showNames = open !== null && around.length > 0 && upp <= open.upp * 1.05;
   const otherBubbles = bubbles.filter((b) => b.cityId !== openCityId);
   // Every city on screen gets its name where there's room, biggest first (hidden while a city is open).
   const cityNames = useMemo(() => {
-    if (openCityId) return new Map<string, CityLabel>();
+    if (openCityId) return new Map<string, CityLabel & { width: number }>();
     const width = textWidth(svgRef.current);
     const onScreen = bubbles.flatMap((b) => {
       const [x, y] = project(b.lat, b.lon);
@@ -282,7 +311,8 @@ export function ScenesPage() {
       if (px < -100 || py < -40 || px > size.w + 100 || py > size.h + 40) return [];
       return [{ id: b.cityId, x: px, y: py, count: b.count, width: width(b.city, LABEL_PX) }];
     });
-    return labelCities(onScreen, DOT_PX);
+    const widths = new Map(onScreen.map((c) => [c.id, c.width]));
+    return new Map([...labelCities(onScreen, DOT_PX)].map(([id, l]) => [id, { ...l, width: widths.get(id)! }]));
   }, [bubbles, openCityId, vb.x, vb.y, upp, size.w, size.h]); // eslint-disable-line react-hooks/exhaustive-deps
   const openName = openCity_?.city;
   const r = DOT_PX * upp;
@@ -296,10 +326,9 @@ export function ScenesPage() {
 
   return (
     <div className="scenes-page" style={styles.page}>
-      <div className="scenes-controls" style={styles.controls}>
+      {filtersOpen && <div ref={filtersRef} id="scenes-filters" className="scenes-controls" style={styles.controls}>
         <div style={styles.titleRow}>
           <h1 style={styles.title}>Scenes</h1>
-          <span style={styles.badge}>Preview</span>
           <span style={styles.count} aria-live="polite">
             {data ? `${shown.length.toLocaleString()} of ${placed.length.toLocaleString()} scenes` : error ? "" : "Loading…"}
           </span>
@@ -329,9 +358,9 @@ export function ScenesPage() {
             </button>
           ))}
         </div>
-      </div>
+      </div>}
 
-      <div ref={boxRef} className={`scenes-map${selected ? " has-panel" : ""}${open ? " city-open" : ""}`} style={styles.mapWrap}>
+      <div ref={boxRef} className={`scenes-map${selected ? " has-panel" : ""}${open ? " city-open" : ""}`} style={{ ...styles.mapWrap, "--filters-h": `${filtersH}px` } as React.CSSProperties}>
         <svg
           ref={svgRef}
           viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
@@ -358,10 +387,17 @@ export function ScenesPage() {
                         stroke="#0f0f0f" strokeWidth={1 * upp} />
                       {(() => {
                         const n = cityNames.get(b.cityId);
-                        return n && (
-                          <text x={x + n.dx * upp} y={y + n.dy * upp} fontSize={LABEL_PX * upp} textAnchor={n.anchor}
-                            dominantBaseline="middle" fill="#ccc" style={{ pointerEvents: "none" }}>{b.city}</text>
-                        );
+                        if (!n) return null;
+                        // The name opens the city too: its tap area is the space labelCities kept free for it.
+                        const lx = x + n.dx * upp, ly = y + n.dy * upp, w = n.width * upp;
+                        const left = n.anchor === "middle" ? lx - w / 2 : n.anchor === "end" ? lx - w : lx;
+                        // A name is never ambiguous: it opens its city even where a tap on the dots would zoom in.
+                        const byName = (e: React.MouseEvent) => { e.stopPropagation(); if (tapped()) openCity(b.cityId); };
+                        return (<g onClick={byName}>
+                          <rect x={left} y={ly - 7 * upp} width={w} height={14 * upp} fill="transparent" />
+                          <text x={lx} y={ly} fontSize={LABEL_PX * upp} textAnchor={n.anchor}
+                            dominantBaseline="middle" fill="#ccc">{b.city}</text>
+                        </g>);
                       })()}
                     </>)}
                   </g>
@@ -376,18 +412,18 @@ export function ScenesPage() {
                 <line key={s.id} x1={centre[0]} y1={centre[1]} x2={x} y2={y} className="scenes-spoke"
                   stroke={s.id === selectedId ? "#fff" : "#4b5d6b"} />
               ))}
-              {/* the city itself: tapping it keeps the city open */}
+              {/* the city itself, and its name: tapping either keeps the city open */}
               <g className="scenes-hit">
                 <circle cx={centre[0]} cy={centre[1]} r={TAP_PX * upp} fill="transparent" />
                 <circle cx={centre[0]} cy={centre[1]} r={r * 1.6} fill="#e0e0e0" stroke="#0f0f0f" strokeWidth={upp} />
+                <text x={centre[0]} y={centre[1] - r * 1.6 - 6 * upp} fontSize={CITY_LABEL_PX * upp} fontWeight={700}
+                  textAnchor="middle" fill="#fff">{openName}</text>
               </g>
-              <text x={centre[0]} y={centre[1] - r * 1.6 - 6 * upp} fontSize={CITY_LABEL_PX * upp} fontWeight={700}
-                textAnchor="middle" fill="#fff" style={{ pointerEvents: "none" }}>{openName}</text>
             </g>
           )}
           {open && ["hit", "dot"].map((layer) => (
             <g key={layer}>
-              {around.map(({ s, x, y, side }) => {
+              {around.map(({ s, x, y, side, w }) => {
                 const on = s.id === selectedId;
                 const left = side === "left";
                 const lx = x + (left ? -1 : 1) * (r + 4 * upp);
@@ -399,11 +435,12 @@ export function ScenesPage() {
                       <title>{`${s.name}${s.era ? ` · ${s.era.label}` : ""}`}</title>
                       <circle cx={x} cy={y} r={on ? r * 1.3 : r} fill={colorFor(s)}
                         stroke={on ? "#fff" : "#0f0f0f"} strokeWidth={(on ? 2.5 : 1) * upp} />
-                      {(showNames || on) && (
+                      {(showNames || on) && (<>
+                        {/* The name opens the scene too: its tap area is the row scatterLayout kept free for it. */}
+                        <rect x={left ? lx - w * upp : lx} y={y - 9 * upp} width={w * upp} height={18 * upp} fill="transparent" />
                         <text x={lx} y={y} fontSize={LABEL_PX * upp} fontWeight={on ? 700 : 400} fill={on ? "#fff" : "#ccc"}
-                          textAnchor={left ? "end" : "start"} dominantBaseline="middle"
-                          style={{ pointerEvents: "none" }}>{shortName(s.name, s.city)}</text>
-                      )}
+                          textAnchor={left ? "end" : "start"} dominantBaseline="middle">{shortName(s.name, s.city)}</text>
+                      </>)}
                     </>)}
                   </g>
                 );
@@ -411,9 +448,21 @@ export function ScenesPage() {
             </g>
           ))}
         </svg>
-        <div className="scenes-zoom" style={styles.zoom}>
-          <button type="button" aria-label="Zoom in" style={styles.zoomBtn} onClick={() => zoomButton(2)}>+</button>
-          <button type="button" aria-label="Zoom out" style={styles.zoomBtn} onClick={() => zoomButton(0.5)}>−</button>
+        <div className="scenes-zoom" style={styles.mapButtons}>
+          <div style={styles.zoom}>
+            <button type="button" aria-label="Filters" title={filtersOpen ? "Hide filters" : "Show filters"}
+              aria-pressed={filtersOpen} aria-controls="scenes-filters"
+              style={{ ...styles.zoomBtn, ...(filtersOpen ? styles.zoomBtnOn : {}) }}
+              onClick={() => setFiltersOpen((o) => !o)}>
+              <FilterIcon />
+              {/* Filters still apply while hidden: a dot says some are set. */}
+              {filtering && !filtersOpen && <span style={styles.filterDot} aria-hidden="true" />}
+            </button>
+          </div>
+          <div style={styles.zoom}>
+            <button type="button" aria-label="Zoom in" style={styles.zoomBtn} onClick={() => zoomButton(2)}>+</button>
+            <button type="button" aria-label="Zoom out" style={styles.zoomBtn} onClick={() => zoomButton(0.5)}>−</button>
+          </div>
         </div>
         {open && (
           <div className="scenes-close" style={styles.zoom}>
@@ -471,6 +520,16 @@ function textWidth(el: Element | null): (text: string, px: number, bold?: boolea
   };
 }
 
+/** A funnel, for the filter button. */
+function FilterIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 5h18l-7 8.5V19l-4 2v-7.5z" />
+    </svg>
+  );
+}
+
 function Chips({ label, items }: { label: string; items: string[] }) {
   return (
     <div style={styles.chips}>
@@ -481,8 +540,9 @@ function Chips({ label, items }: { label: string; items: string[] }) {
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  page: { flex: 1, minHeight: 0, display: "flex", flexDirection: "column" },
-  controls: { padding: "0.75rem 1rem 0.5rem", display: "flex", flexDirection: "column", gap: "0.5rem", borderBottom: "1px solid #2a2a2a" },
+  page: { position: "relative", flex: 1, minHeight: 0, display: "flex", flexDirection: "column" },
+  // Over the top of the map, not above it, so the map stays put when they open.
+  controls: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 20, background: "rgba(18, 18, 18, 0.97)", boxShadow: "0 6px 16px rgba(0, 0, 0, 0.4)", padding: "0.75rem 1rem 0.5rem", display: "flex", flexDirection: "column", gap: "0.5rem", borderBottom: "1px solid #2a2a2a" },
   titleRow: { display: "flex", alignItems: "baseline", gap: "0.5rem", flexWrap: "wrap" },
   title: { fontSize: "1.3rem", fontWeight: 700, color: "#e0e0e0" },
   badge: { fontSize: "0.7rem", color: "#feca57", border: "1px solid #feca57", borderRadius: "999px", padding: "0.05rem 0.45rem" },
@@ -498,8 +558,11 @@ const styles: Record<string, React.CSSProperties> = {
   mapWrap: { position: "relative", flex: 1, minHeight: "320px", overflow: "hidden", background: "#0b1a26", touchAction: "none" },
   svg: { display: "block", cursor: "grab", userSelect: "none", transformOrigin: "0 0", willChange: "transform" },
   // Placed by .scenes-zoom in index.css: bottom right, above a phone's sheet.
+  mapButtons: { display: "flex", flexDirection: "column", gap: "8px" },
   zoom: { display: "flex", flexDirection: "column", gap: "1px", borderRadius: "8px", overflow: "hidden", border: "1px solid #333" },
-  zoomBtn: { width: "44px", height: "44px", background: "#1a1a1a", border: "none", color: "#e0e0e0", fontSize: "1.2rem", cursor: "pointer" },
+  zoomBtn: { position: "relative", display: "flex", alignItems: "center", justifyContent: "center", width: "44px", height: "44px", background: "#1a1a1a", border: "none", color: "#e0e0e0", fontSize: "1.2rem", cursor: "pointer" },
+  zoomBtnOn: { background: "#e0e0e0", color: "#1a1a1a" },
+  filterDot: { position: "absolute", top: "8px", right: "8px", width: "7px", height: "7px", borderRadius: "50%", background: "#2ecc71" },
   hint: { position: "absolute", bottom: "0.5rem", left: "0.75rem", color: "#777", fontSize: "0.75rem", pointerEvents: "none" },
   error: { position: "absolute", top: "1rem", left: "4.5rem", right: "1rem", zIndex: 10, background: "#2a1515", border: "1px solid #ff6b6b", color: "#ffb3b3", padding: "0.75rem", borderRadius: "8px", fontSize: "0.85rem" },
   panel: { zIndex: 10, background: "rgba(22, 22, 22, 0.97)", border: "1px solid #333", color: "#e0e0e0", overflowY: "auto", padding: "1rem 1rem 1.25rem" },

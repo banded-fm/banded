@@ -267,11 +267,11 @@ src/
 │   └── AboutPage.tsx     — Project info, data source credits, GitHub link.
 │   └── ScenesPage.tsx     — In development (#/scenes, not in the menu): the scenes from scripts/find_scenes.py on a
 │                            world map (scenes/world-low.svg, -high.svg zoomed in), a dot per city; an open city amid its scattered scenes,
-│                            named and joined to it by lines; era colours grey to green; pan/zoom/pinch; text and decade toggles; ?scene=<id>.
+│                            named and joined to it by lines; era colours grey to green; pan/zoom/pinch; filters (text, city, decades) behind a filter button; ?scene=<id>.
 ├── components/
 │   ├── ArtistAutocomplete.tsx — Artist input + dropdown (keyboard, ARIA combobox, 44px rows on phones).
 │   │                       Used by SearchBar, Discover, Similarity and Play's custom game.
-│   ├── Layout.tsx        — Shared nav bar with Explore/Play/Discover/Similarity/About links; the brand links home; hidden on the home page. Pins SiteFooter under every page but Home (which puts it after its content) and About (which has the full credits).
+│   ├── Layout.tsx        — Shared nav bar with Explore/Play/Discover/Similarity/About links; pages not in the menu yet (Scenes) show their name and a Preview badge; the brand links home; hidden on the home page. Pins SiteFooter under every page but Home (which puts it after its content) and About (which has the full credits).
 │   ├── SiteFooter.tsx    — One-line footer: the data sources (MusicBrainz, setlist.fm, Pollstar) and that connections and shows may be missing.
 │   │                       Inline tabs on desktop; hamburger menu below 640px.
 │   ├── SearchBar.tsx     — Search input, expand, reset. Responsive layout.
