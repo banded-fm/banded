@@ -266,8 +266,8 @@ src/
 │   ├── searchResolution.ts — Pure logic: resolve an Explore search by MBID (just-clicked node) or by name.
 │   └── AboutPage.tsx     — Project info, data source credits, GitHub link.
 │   └── ScenesPage.tsx     — In development (#/scenes, not in the menu): the scenes from scripts/find_scenes.py on a
-│                            world map (scenes/world-low.svg, -high.svg zoomed in), a bubble per city; a city's scenes as dots,
-│                            coloured by era; pan/zoom/pinch; filter by text and decade; ?scene=<id>.
+│                            world map (scenes/world-low.svg, -high.svg zoomed in), a dot per city; an open city amid its scattered scenes,
+│                            named and joined to it by lines; era colours grey to green; pan/zoom/pinch; text and decade toggles; ?scene=<id>.
 ├── components/
 │   ├── ArtistAutocomplete.tsx — Artist input + dropdown (keyboard, ARIA combobox, 44px rows on phones).
 │   │                       Used by SearchBar, Discover, Similarity and Play's custom game.

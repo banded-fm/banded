@@ -2,17 +2,19 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useSearchParams } from "react-router-dom";
 import worldLow from "../scenes/world-low.svg?raw";
 import {
-  DECADES, HOME, bubbleRadius, citiesBySize, cityBubbles, colorFor, decadeColor, filterScenes, loadScenes,
-  MAX_ZOOM, MIN_ZOOM, clampView, placeScenes, project, radiusFor, scenesUrls, separate, spiral, viewBox, zoomAt,
-  type PlacedScene, type ScenesData, type View,
+  DECADES, HOME, citiesByName, cityBubbles, colorFor, labelCities, decadeColor, filterScenes, loadScenes,
+  MAX_ZOOM, MIN_ZOOM, clampView, placeScenes, project, scatterLayout, scenesUrls, shortName, viewBox, zoomAt,
+  type CityLabel, type PlacedScene, type Room, type ScenesData, type View,
 } from "../scenes/sceneMap";
 
 /**
  * Scenes (in development, not in the menu): the music scenes
  * scripts/find_scenes.py finds in each city, on a world map. Each city is a
- * bubble (its number of scenes); tap one to open it, and its scenes appear as
- * dots near the venues they're centred on, pushed apart so each can be tapped.
- * Tap a scene for its era, genres and artists; ?scene=<id> opens one.
+ * dot; tap one to open it: its scenes are scattered around it, joined to it
+ * by lines, biggest nearest, with their names. A tap anywhere else
+ * closes it (the map stays where it is). Colours run from grey
+ * (oldest era) to green (newest). Tap a scene for its era, genres and
+ * artists; ?scene=<id> opens one.
  */
 const paths = (svg: string) => svg.replace(/^[\s\S]*?<svg[^>]*>/, "").replace(/<\/svg>\s*$/, "");
 // The world in two levels of detail: a light outline zoomed out (in this chunk), and a detailed one, loaded when
@@ -20,8 +22,9 @@ const paths = (svg: string) => svg.replace(/^[\s\S]*?<svg[^>]*>/, "").replace(/<
 const WORLD_LOW = paths(worldLow);
 const DETAIL_ZOOM = 8;
 const CITY_ZOOM = 40;         // zoom when a city is opened
-const SPACING_PX = 15;        // between scenes spread around one venue, before they're pushed apart
-const MIN_DIST_PX = 30;       // between the centres of an open city's dots
+const DOT_PX = 7;             // every city and scene dot: the same size
+const LABEL_PX = 11;          // scene names
+const CITY_LABEL_PX = 13;     // the open city's name
 const TAP_PX = 22;            // tap radius around every dot (44 px across)
 const DRAG_PX = 6;            // a press that moves less than this is a tap
 const WHEEL_SETTLE_MS = 150;  // wheel zooming is drawn live, then redrawn this long after the last turn
@@ -30,9 +33,13 @@ export function ScenesPage() {
   const [data, setData] = useState<ScenesData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [decade, setDecade] = useState<number | null>(null);
+  // Era toggles; none picked means every era.
+  const [decades, setDecades] = useState<ReadonlySet<number>>(new Set());
   const [view, setView] = useState<View>(HOME);
-  const [openCityId, setOpenCityId] = useState<string | null>(null);
+  // The open city, the map units per screen pixel when it opened (its scenes are laid out in pixels at that zoom:
+  // zooming in spreads them apart, zooming out hides their names), and the screen around it then.
+  const [open, setOpen] = useState<{ id: string; upp: number; room: Room; avoid: Room[] } | null>(null);
+  const openCityId = open?.id ?? null;
   const [size, setSize] = useState({ w: 800, h: 500 });
   const [params, setParams] = useSearchParams();
   const selectedId = params.get("scene");
@@ -59,8 +66,8 @@ export function ScenesPage() {
   }, []);
 
   const placed = useMemo(() => (data ? placeScenes(data) : []), [data]);
-  const shown = useMemo(() => filterScenes(placed, query, decade), [placed, query, decade]);
-  const cities = useMemo(() => (data ? citiesBySize(data) : []), [data]);
+  const shown = useMemo(() => filterScenes(placed, query, decades), [placed, query, decades]);
+  const cities = useMemo(() => (data ? citiesByName(data) : []), [data]);
   const centres = useMemo(() => new Map(cities.map((c) => [c.id, c.centre])), [cities]);
   const bubbles = useMemo(() => cityBubbles(shown, centres), [shown, centres]);
   const selected: PlacedScene | null = placed.find((s) => s.id === selectedId) ?? null;
@@ -70,21 +77,40 @@ export function ScenesPage() {
 
   const select = (id: string | null) => setParams(id ? { scene: id } : {}, { replace: true });
 
-  /** Centre a point; on a phone, a little above the middle so the scene's sheet doesn't cover it. */
-  const goTo = useCallback((lat: number, lon: number, k: number) => {
-    const [x, y] = project(lat, lon);
-    const phone = window.matchMedia("(max-width: 640px)").matches;
+  /**
+   * Open a city: centre it at CITY_ZOOM (or closer, if already closer) with its scenes scattered around it, spread
+   * to the shape of the screen. On a phone with a scene's sheet open, they sit in the top half.
+   */
+  const openCityAt = useCallback((cityId: string, withSheet: boolean) => {
+    const c = data?.cities.find((x) => x.id === cityId);
+    if (!c) return;
+    const [x, y] = project(c.centre.lat, c.centre.lon);
+    const k = Math.max(view.k, CITY_ZOOM);
     const next = viewBox({ cx: x, cy: y, k }, size.w, size.h);
-    setView({ cx: x, cy: phone ? y + next.h * 0.22 : y, k });
-  }, [size]);
+    const phone = window.matchMedia("(max-width: 640px)").matches;
+    const sheet = phone && withSheet;
+    // Around the city on screen: above a phone's sheet (the city a quarter of the way down), clear of the hint.
+    const room: Room = sheet
+      ? { left: -size.w / 2 + 6, right: size.w / 2 - 6, top: -size.h / 4 + 6, bottom: size.h * 0.2 }
+      : { left: -size.w / 2 + 6, right: size.w / 2 - 6, top: -size.h / 2 + 6, bottom: size.h / 2 - 30 };
+    // Clear of the zoom buttons (bottom right; above a phone's sheet) and the close button (top right), measured
+    // from the city.
+    const ox = size.w / 2, oy = sheet ? size.h / 4 : size.h / 2;
+    const zoomBottom = sheet ? size.h * 0.45 : size.h;
+    const avoid: Room[] = [
+      { left: size.w - 64 - ox, right: size.w - ox, top: zoomBottom - 110 - oy, bottom: zoomBottom - oy },
+      { left: size.w - 64 - ox, right: size.w - ox, top: -oy, bottom: 64 - oy },
+    ];
+    setOpen({ id: cityId, upp: next.unitsPerPx, room, avoid });
+    setView({ cx: x, cy: sheet ? y + next.h * 0.25 : y, k });
+  }, [data, view.k, size]);
 
   // A scene in the link (?scene=...) opens its city, once, when the data arrives.
   useEffect(() => {
     if (centred.current || !selected || size.w < 10) return;
     centred.current = true;
-    setOpenCityId(selected.cityId);
-    goTo(selected.lat, selected.lon, CITY_ZOOM);
-  }, [selected, goTo, size.w]);
+    openCityAt(selected.cityId, true);
+  }, [selected, openCityAt, size.w]);
 
   // ---- pan and zoom: drag, pinch, wheel, double-click, buttons
   // While a finger or the wheel is moving, the map isn't redrawn: the whole SVG is moved and scaled with a CSS
@@ -200,16 +226,13 @@ export function ScenesPage() {
   const zoomButton = (factor: number) => setView((v) => zoomAt(v, factor, size.w / 2, size.h / 2, size.w, size.h));
   const tapped = () => gesture.current.moved <= DRAG_PX;
 
-  const openCity = (cityId: string) => {
-    const c = cities.find((x) => x.id === cityId);
-    if (!c) return;
-    setOpenCityId(cityId);
-    goTo(c.centre.lat, c.centre.lon, Math.max(view.k, CITY_ZOOM));
-  };
+  const openCity = (cityId: string) => openCityAt(cityId, false);
 
-  const home = () => {
-    setOpenCityId(null);
-    setView(HOME);
+  /** With a city open, a tap anywhere but a scene, the city or another city closes it, leaving the map where it is. */
+  const onMapClick = (e: React.MouseEvent) => {
+    if (!open || !tapped() || (e.target as Element).closest(".scenes-hit")) return;
+    select(null);
+    setOpen(null);
   };
 
   /** A city's bubble: open the city, or where bubbles overlap under the finger (Europe from afar), zoom in there. */
@@ -236,22 +259,40 @@ export function ScenesPage() {
     setView({ cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, k });
   };
 
-  // ---- what to draw: a bubble per city, and the open city's scenes as dots
-  const dots = useMemo(() => {
-    if (!openCityId) return [];
-    const out = shown.filter((s) => s.cityId === openCityId).map((s) => {
-      const [bx, by] = project(s.lat, s.lon);
-      const [ox, oy] = spiral(s.slot, SPACING_PX * upp);
-      return { s, x: bx + ox, y: by + oy, r: radiusFor(s.size) * upp };
-    });
-    separate(out, MIN_DIST_PX * upp, 6 * upp);
-    // the selected one last, so it's on top
-    return out.sort((a, b) => Number(a.s.id === selectedId) - Number(b.s.id === selectedId) || b.s.size - a.s.size);
-  }, [shown, openCityId, upp, selectedId]);
+  // ---- what to draw: a dot per city; the open city in the middle of its scattered scenes
+  const openCity_ = data?.cities.find((c) => c.id === openCityId) ?? null;
+  const centre = openCity_ ? project(openCity_.centre.lat, openCity_.centre.lon) : null;
+  const around = useMemo(() => {
+    if (!open || !centre || !openCity_) return [];
+    const width = textWidth(svgRef.current);
+    return scatterLayout(shown.filter((s) => s.cityId === open.id),
+      (s) => width(shortName(s.name, s.city), LABEL_PX, true), width(openCity_.city, CITY_LABEL_PX, true), open.room, open.avoid)
+      .map(({ scene, dx, dy, side }) => ({ s: scene, x: centre[0] + dx * open.upp, y: centre[1] + dy * open.upp, side }));
+  }, [shown, open, openCity_, centre?.[0], centre?.[1]]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Names at the zoom the city opened at or closer; zoomed further out they'd overlap.
+  const showNames = open !== null && around.length > 0 && upp <= open.upp * 1.05;
   const otherBubbles = bubbles.filter((b) => b.cityId !== openCityId);
-  const openName = cities.find((c) => c.id === openCityId)?.city;
+  // Every city on screen gets its name where there's room, biggest first (hidden while a city is open).
+  const cityNames = useMemo(() => {
+    if (openCityId) return new Map<string, CityLabel>();
+    const width = textWidth(svgRef.current);
+    const onScreen = bubbles.flatMap((b) => {
+      const [x, y] = project(b.lat, b.lon);
+      const px = (x - vb.x) / upp, py = (y - vb.y) / upp;
+      if (px < -100 || py < -40 || px > size.w + 100 || py > size.h + 40) return [];
+      return [{ id: b.cityId, x: px, y: py, count: b.count, width: width(b.city, LABEL_PX) }];
+    });
+    return labelCities(onScreen, DOT_PX);
+  }, [bubbles, openCityId, vb.x, vb.y, upp, size.w, size.h]); // eslint-disable-line react-hooks/exhaustive-deps
+  const openName = openCity_?.city;
+  const r = DOT_PX * upp;
 
-  const filtering = query.trim() !== "" || decade !== null;
+  const filtering = query.trim() !== "" || decades.size > 0;
+  const toggleDecade = (start: number) => setDecades((d) => {
+    const next = new Set(d);
+    if (next.has(start)) next.delete(start); else next.add(start);
+    return next;
+  });
 
   return (
     <div className="scenes-page" style={styles.page}>
@@ -278,26 +319,27 @@ export function ScenesPage() {
           )}
         </div>
         <div className="scenes-decades" style={styles.decades} role="group" aria-label="Era">
-          <button type="button" onClick={() => setDecade(null)} aria-pressed={decade === null}
-            style={{ ...styles.chip, ...(decade === null ? styles.chipOn : {}) }}>All eras</button>
+          <button type="button" onClick={() => setDecades(new Set())} aria-pressed={decades.size === 0}
+            style={{ ...styles.chip, ...(decades.size === 0 ? styles.chipOn : {}) }}>All eras</button>
           {DECADES.map((d) => (
-            <button key={d.start} type="button" onClick={() => setDecade(decade === d.start ? null : d.start)}
-              aria-pressed={decade === d.start}
-              style={{ ...styles.chip, ...(decade === d.start ? styles.chipOn : {}), borderColor: d.color }}>
+            <button key={d.start} type="button" onClick={() => toggleDecade(d.start)}
+              aria-pressed={decades.has(d.start)}
+              style={{ ...styles.chip, ...(decades.has(d.start) ? styles.chipOn : {}), borderColor: d.color }}>
               <span style={{ ...styles.dot, background: d.color }} />{d.label}
             </button>
           ))}
         </div>
       </div>
 
-      <div ref={boxRef} className="scenes-map" style={styles.mapWrap}>
+      <div ref={boxRef} className={`scenes-map${selected ? " has-panel" : ""}${open ? " city-open" : ""}`} style={styles.mapWrap}>
         <svg
           ref={svgRef}
           viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
           width="100%" height="100%" style={styles.svg}
           role="img" aria-label="World map of music scenes"
           onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}
-          onDoubleClick={(e) => { const p = local(e); setView((v) => zoomAt(v, 2, p.x, p.y, size.w, size.h)); }}
+          onClick={onMapClick}
+          onDoubleClick={(e) => { if (open) return; const p = local(e); setView((v) => zoomAt(v, 2, p.x, p.y, size.w, size.h)); }}
         >
           <g className="scenes-world" dangerouslySetInnerHTML={{ __html: worldPaths }} />
           {/* Two layers: every tap area first, then every dot, so a dot under the finger wins over a
@@ -306,7 +348,6 @@ export function ScenesPage() {
             <g key={layer} opacity={openCityId ? 0.45 : 1}>
               {otherBubbles.map((b) => {
                 const [x, y] = project(b.lat, b.lon);
-                const r = bubbleRadius(b.count) * upp;
                 return (
                   <g key={b.cityId} className="scenes-hit" onClick={(e) => { if (tapped()) tapBubble(b.cityId, x, y, e); }}>
                     {layer === "hit" ? (
@@ -315,9 +356,53 @@ export function ScenesPage() {
                       <title>{`${b.city}: ${b.count} scene${b.count === 1 ? "" : "s"}`}</title>
                       <circle cx={x} cy={y} r={r} fill={decadeColor(b.decade)} fillOpacity={0.75}
                         stroke="#0f0f0f" strokeWidth={1 * upp} />
-                      {view.k >= 2.5 && b.count >= 12 && (
-                        <text x={x} y={y + r + 11 * upp} fontSize={11 * upp} textAnchor="middle" fill="#ccc"
-                          style={{ pointerEvents: "none" }}>{b.city}</text>
+                      {(() => {
+                        const n = cityNames.get(b.cityId);
+                        return n && (
+                          <text x={x + n.dx * upp} y={y + n.dy * upp} fontSize={LABEL_PX * upp} textAnchor={n.anchor}
+                            dominantBaseline="middle" fill="#ccc" style={{ pointerEvents: "none" }}>{b.city}</text>
+                        );
+                      })()}
+                    </>)}
+                  </g>
+                );
+              })}
+            </g>
+          ))}
+          {open && centre && (
+            <g>
+              {/* lines from the city to each of its scenes */}
+              {around.map(({ s, x, y }) => (
+                <line key={s.id} x1={centre[0]} y1={centre[1]} x2={x} y2={y} className="scenes-spoke"
+                  stroke={s.id === selectedId ? "#fff" : "#4b5d6b"} />
+              ))}
+              {/* the city itself: tapping it keeps the city open */}
+              <g className="scenes-hit">
+                <circle cx={centre[0]} cy={centre[1]} r={TAP_PX * upp} fill="transparent" />
+                <circle cx={centre[0]} cy={centre[1]} r={r * 1.6} fill="#e0e0e0" stroke="#0f0f0f" strokeWidth={upp} />
+              </g>
+              <text x={centre[0]} y={centre[1] - r * 1.6 - 6 * upp} fontSize={CITY_LABEL_PX * upp} fontWeight={700}
+                textAnchor="middle" fill="#fff" style={{ pointerEvents: "none" }}>{openName}</text>
+            </g>
+          )}
+          {open && ["hit", "dot"].map((layer) => (
+            <g key={layer}>
+              {around.map(({ s, x, y, side }) => {
+                const on = s.id === selectedId;
+                const left = side === "left";
+                const lx = x + (left ? -1 : 1) * (r + 4 * upp);
+                return (
+                  <g key={s.id} className="scenes-hit" onClick={() => { if (tapped()) select(s.id); }}>
+                    {layer === "hit" ? (
+                      <circle cx={x} cy={y} r={TAP_PX * upp} fill="transparent" />
+                    ) : (<>
+                      <title>{`${s.name}${s.era ? ` · ${s.era.label}` : ""}`}</title>
+                      <circle cx={x} cy={y} r={on ? r * 1.3 : r} fill={colorFor(s)}
+                        stroke={on ? "#fff" : "#0f0f0f"} strokeWidth={(on ? 2.5 : 1) * upp} />
+                      {(showNames || on) && (
+                        <text x={lx} y={y} fontSize={LABEL_PX * upp} fontWeight={on ? 700 : 400} fill={on ? "#fff" : "#ccc"}
+                          textAnchor={left ? "end" : "start"} dominantBaseline="middle"
+                          style={{ pointerEvents: "none" }}>{shortName(s.name, s.city)}</text>
                       )}
                     </>)}
                   </g>
@@ -325,36 +410,20 @@ export function ScenesPage() {
               })}
             </g>
           ))}
-          {openCityId && ["hit", "dot"].map((layer) => (
-            <g key={layer}>
-              {dots.map(({ s, x, y, r }) => {
-                const on = s.id === selectedId;
-                return (
-                  <g key={s.id} className="scenes-hit" onClick={() => { if (tapped()) select(s.id); }}>
-                    {layer === "hit" ? (
-                      <circle cx={x} cy={y} r={Math.max(r, TAP_PX * upp)} fill="transparent" />
-                    ) : (<>
-                      <title>{`${s.name}${s.era ? ` · ${s.era.label}` : ""}`}</title>
-                      <circle cx={x} cy={y} r={on ? r + 3 * upp : r} fill={colorFor(s)} fillOpacity={on ? 0.95 : 0.75}
-                        stroke={on ? "#fff" : "#0f0f0f"} strokeWidth={(on ? 3 : 1) * upp} />
-                    </>)}
-                  </g>
-                );
-              })}
-            </g>
-          ))}
         </svg>
-        <div style={styles.zoom}>
+        <div className="scenes-zoom" style={styles.zoom}>
           <button type="button" aria-label="Zoom in" style={styles.zoomBtn} onClick={() => zoomButton(2)}>+</button>
           <button type="button" aria-label="Zoom out" style={styles.zoomBtn} onClick={() => zoomButton(0.5)}>−</button>
-          <button type="button" aria-label="Whole world" style={styles.zoomBtn} onClick={home}>⌂</button>
         </div>
-        {openName && (
-          <button type="button" onClick={() => { setOpenCityId(null); select(null); }} style={styles.cityChip}>
-            {openName} ✕
-          </button>
+        {open && (
+          <div className="scenes-close" style={styles.zoom}>
+            <button type="button" aria-label={`Close ${openName}`} title={`Close ${openName}`} style={styles.zoomBtn}
+              onClick={() => { setOpen(null); select(null); }}>✕</button>
+          </div>
         )}
-        <p style={styles.hint}>{openCityId ? "Tap a scene, or another city" : "Tap a city"}</p>
+        <p style={styles.hint}>
+          {!open ? "Tap a city" : showNames ? "Tap a scene, or the map to close the city" : "Zoom in to read the scene names"}
+        </p>
         {error && <p role="alert" style={styles.error}>{error}</p>}
         {selected && <ScenePanel scene={selected} onClose={() => select(null)} />}
       </div>
@@ -391,6 +460,17 @@ function ScenePanel({ scene, onClose }: { scene: PlacedScene; onClose: () => voi
   );
 }
 
+/** Measures text as the map draws it (its font, at a size in pixels); falls back to an estimate without a canvas. */
+function textWidth(el: Element | null): (text: string, px: number, bold?: boolean) => number {
+  const ctx = typeof document !== "undefined" ? document.createElement("canvas").getContext("2d") : null;
+  const family = el ? getComputedStyle(el).fontFamily : "sans-serif";
+  return (text, px, bold = false) => {
+    if (!ctx) return text.length * px * (bold ? 0.62 : 0.56);
+    ctx.font = `${bold ? 700 : 400} ${px}px ${family}`;
+    return Math.ceil(ctx.measureText(text).width);
+  };
+}
+
 function Chips({ label, items }: { label: string; items: string[] }) {
   return (
     <div style={styles.chips}>
@@ -417,9 +497,9 @@ const styles: Record<string, React.CSSProperties> = {
   dot: { width: "0.6rem", height: "0.6rem", borderRadius: "50%", display: "inline-block" },
   mapWrap: { position: "relative", flex: 1, minHeight: "320px", overflow: "hidden", background: "#0b1a26", touchAction: "none" },
   svg: { display: "block", cursor: "grab", userSelect: "none", transformOrigin: "0 0", willChange: "transform" },
-  zoom: { position: "absolute", top: "0.75rem", left: "0.75rem", display: "flex", flexDirection: "column", gap: "1px", borderRadius: "8px", overflow: "hidden", border: "1px solid #333" },
+  // Placed by .scenes-zoom in index.css: bottom right, above a phone's sheet.
+  zoom: { display: "flex", flexDirection: "column", gap: "1px", borderRadius: "8px", overflow: "hidden", border: "1px solid #333" },
   zoomBtn: { width: "44px", height: "44px", background: "#1a1a1a", border: "none", color: "#e0e0e0", fontSize: "1.2rem", cursor: "pointer" },
-  cityChip: { position: "absolute", top: "0.75rem", left: "4.25rem", minHeight: "44px", padding: "0 0.9rem", background: "#1a1a1a", border: "1px solid #444", borderRadius: "999px", color: "#e0e0e0", fontSize: "0.9rem", cursor: "pointer" },
   hint: { position: "absolute", bottom: "0.5rem", left: "0.75rem", color: "#777", fontSize: "0.75rem", pointerEvents: "none" },
   error: { position: "absolute", top: "1rem", left: "4.5rem", right: "1rem", zIndex: 10, background: "#2a1515", border: "1px solid #ff6b6b", color: "#ffb3b3", padding: "0.75rem", borderRadius: "8px", fontSize: "0.85rem" },
   panel: { zIndex: 10, background: "rgba(22, 22, 22, 0.97)", border: "1px solid #333", color: "#e0e0e0", overflowY: "auto", padding: "1rem 1rem 1.25rem" },

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  DECADES, HOME, MAX_ZOOM, WORLD, bubbleRadius, citiesBySize, cityBubbles, clampView, colorFor, decadeOf, filterScenes,
-  loadScenes, matches, panBy, placeScenes, project, radiusFor, scenesUrls, separate, spiral, viewBox, zoomAt,
+  labelCities,
+  DECADES, HOME, MAX_ZOOM, WORLD, citiesByName, cityBubbles, clampView, colorFor, decadeOf, eraGradient, filterScenes,
+  loadScenes, matches, panBy, placeScenes, project, scatterLayout, scenesUrls, shortName, viewBox, zoomAt,
   type Scene, type ScenesData,
 } from "../scenes/sceneMap";
 
@@ -32,22 +33,64 @@ describe("scene map helpers", () => {
     expect(decadeOf(scene("a", { era: { from: 2015, to: 2024, peak: 2020, label: "" } }))).toBe(2010);
     expect(decadeOf(scene("a", { era: null }))).toBeNull();
     expect(colorFor(scene("a"))).toBe(DECADES.find((d) => d.start === 1980)!.color);
-    expect(colorFor(scene("a", { era: null }))).toBe("#888");
+    expect(colorFor(scene("a", { era: null }))).toBe("#4a4a4a");
   });
 
-  it("sizes markers by scene size, within bounds", () => {
-    expect(radiusFor(8)).toBe(6);
-    expect(radiusFor(100)).toBe(10);
-    expect(radiusFor(10_000)).toBe(16);
+  it("colours eras from grey (oldest) to green (newest)", () => {
+    expect(eraGradient(0)).toBe("#808080");
+    expect(eraGradient(1)).toBe("#2ecc71");
+    expect(eraGradient(0.5)).toBe("#57a679");
+    expect(DECADES[0]!.color).toBe("#808080");
+    expect(DECADES[DECADES.length - 1]!.color).toBe("#2ecc71");
+    expect(new Set(DECADES.map((d) => d.color)).size).toBe(DECADES.length);
   });
 
-  it("gives scenes at the same point slots, spread on a spiral", () => {
-    const placed = placeScenes(DATA);
-    expect(placed.map((s) => [s.id, s.slot, s.cityId])).toEqual([
-      ["grunge", 0, "seattle"], ["riot", 1, "seattle"], ["funk", 0, "seattle"], ["mersey", 0, "liverpool"]]);
-    expect(spiral(0, 15)).toEqual([0, 0]);
-    expect(Math.hypot(...spiral(1, 15))).toBeCloseTo(15, 6);
-    expect(Math.hypot(...spiral(4, 15))).toBeCloseTo(30, 6);
+  it("scatters an open city's scenes around it, biggest nearest, names level and never overlapping", () => {
+    const many = Array.from({ length: 40 }, (_, i) => scene(`s${i}`, { name: `Seattle scene ${i}`, size: 100 - i }));
+    const width = (s: Scene) => 6 * s.name.length;
+    const room = { left: -400, right: 400, top: -250, bottom: 250 };
+    const out = scatterLayout(many, width, 50, room);
+    expect(out.map((o) => o.scene.id)).toEqual(many.map((s) => s.id));                // biggest first
+    const dist = out.map((o) => Math.hypot(o.dx, o.dy));
+    expect(dist[0]).toBeLessThan(dist[dist.length - 1]!);                              // biggest nearest
+    for (const o of out) {
+      expect(dist[out.indexOf(o)]).toBeGreaterThanOrEqual(34);                          // clear of the city
+      expect(o.side).toBe(o.dx < 0 ? "left" : "right");                                // name away from the city
+    }
+    const box = (o: (typeof out)[number]) => {
+      const w = width(o.scene);
+      return o.side === "right" ? [o.dx - 13, o.dy - 9, o.dx + 13 + w, o.dy + 9] : [o.dx - 13 - w, o.dy - 9, o.dx + 13, o.dy + 9];
+    };
+    for (let i = 0; i < out.length; i++) for (let j = i + 1; j < out.length; j++) {
+      const [a, b] = [box(out[i]!), box(out[j]!)];
+      expect(a[0]! < b[2]! && b[0]! < a[2]! && a[1]! < b[3]! && b[1]! < a[3]!).toBe(false);
+    }
+    for (const b of out.map(box)) expect(b[0]! >= room.left && b[2]! <= room.right && b[1]! >= room.top && b[3]! <= room.bottom).toBe(true);
+    expect(scatterLayout(many, width, 50, room)).toEqual(out);
+    const corner = { left: -400, right: -200, top: -250, bottom: -100 };          // say, buttons in a corner
+    for (const b of scatterLayout(many, width, 50, room, [corner]).map(box))
+      expect(b[0]! < corner.right && corner.left < b[2]! && b[1]! < corner.bottom && corner.top < b[3]!).toBe(false);                          // the same every time
+    // A room too small for them all: the rest spill outside it, still without overlapping.
+    const small = scatterLayout(many, width, 50, { left: -100, right: 100, top: -80, bottom: 80 });
+    expect(small).toHaveLength(many.length);
+    expect(small.some((o) => Math.abs(o.dx) > 100 || Math.abs(o.dy) > 80)).toBe(true);
+    expect(shortName("Seattle grunge", "Seattle")).toBe("grunge");
+    expect(shortName("Olympia riot grrrl", "Seattle")).toBe("Olympia riot grrrl");
+  });
+
+  it("names every city that has room, biggest first, moving a name aside before dropping it", () => {
+    const labels = labelCities([
+      { id: "big", x: 100, y: 100, count: 50, width: 60 },
+      { id: "pushed", x: 100, y: 136, count: 5, width: 60 },     // a dot just below it takes its spot below
+      { id: "small", x: 100, y: 155, count: 1, width: 60 },      // small but with room: named
+    ], 7);
+    expect(labels.get("big")).toEqual({ dx: 0, dy: 16.5, anchor: "middle" });
+    expect(labels.get("pushed")).toEqual({ dx: 10, dy: 0, anchor: "start" });
+    expect(labels.get("small")?.anchor).toBe("middle");
+    // Crowded: three cities on one spot; the biggest is named, the rest wait for a closer zoom.
+    const crowd = labelCities([0, 1, 2, 3, 4].map((i) => ({ id: `c${i}`, x: 50, y: 50, count: 10 - i, width: 40 })), 7);
+    expect(crowd.has("c0")).toBe(true);
+    expect(crowd.size).toBeLessThan(5);
   });
 
   it("projects latitude and longitude onto the Mercator world map", () => {
@@ -72,8 +115,6 @@ describe("scene map helpers", () => {
     expect(b.map((x) => [x.cityId, x.count, x.decade])).toEqual([["seattle", 3, 1980], ["liverpool", 1, 1960]]);
     expect(b[0]!.lat).toBe(47.61);                                         // the city's centre
     expect(b[1]!.lat).toBe(53.4);                                          // no centre given: its scene's point
-    expect(bubbleRadius(1)).toBe(4);
-    expect(bubbleRadius(400)).toBe(15);
   });
 
   it("pans and zooms the view, keeping the point under the cursor", () => {
@@ -92,9 +133,9 @@ describe("scene map helpers", () => {
     expect(zoomAt(HOME, 0.1, 0, 0, 1000, 500).k).toBe(1);
   });
 
-  it("filters by text (name, city, genre, tag, artist) and decade", () => {
+  it("filters by text (name, city, genre, tag, artist) and decades, none picked being all", () => {
     const placed = placeScenes(DATA);
-    const ids = (q: string, d: number | null = null) => filterScenes(placed, q, d).map((s) => s.id);
+    const ids = (q: string, d: number | null = null) => filterScenes(placed, q, new Set(d === null ? [] : [d])).map((s) => s.id);
     expect(ids("")).toHaveLength(4);
     expect(ids("riot")).toEqual(["riot"]);
     expect(ids("liverpool")).toEqual(["mersey"]);
@@ -105,10 +146,13 @@ describe("scene map helpers", () => {
     expect(ids("nirvana", 1960)).toEqual(["mersey"]);
     expect(ids("nirvana", 1950)).toEqual([]);
     expect(matches(placed[0]!, "  ")).toBe(true);
+    expect(filterScenes(placed, "", new Set([1960, 1980])).map((s) => s.id)).toEqual(["grunge", "mersey"]);
+    expect(filterScenes(placed, "", new Set(DECADES.map((d) => d.start))).map((s) => s.id))
+      .toEqual(filterScenes(placed, "", new Set()).map((s) => s.id));
   });
 
-  it("lists cities with scenes, biggest first", () => {
-    expect(citiesBySize(DATA).map((c) => c.id)).toEqual(["seattle", "liverpool"]);
+  it("lists cities with scenes, A to Z", () => {
+    expect(citiesByName(DATA).map((c) => c.id)).toEqual(["liverpool", "seattle"]);
   });
 
   it("loads the scenes file next to the app first, then next to the graph on the CDN", async () => {
@@ -126,20 +170,5 @@ describe("scene map helpers", () => {
     expect(seen).toEqual(["/scenes.json", "https://cdn/scenes.json"]);
     const failing = (async () => new Response("nope", { status: 404 })) as typeof fetch;
     await expect(loadScenes(["/a.json"], failing)).rejects.toThrow("Scenes could not be loaded. Tried: /a.json → 404");
-  });
-});
-
-describe("separate", () => {
-  it("pushes overlapping dots apart until each pair is far enough, and leaves spaced ones alone", () => {
-    const dots = [{ x: 0, y: 0, r: 5 }, { x: 0, y: 0, r: 5 }, { x: 3, y: 0, r: 10 }, { x: 500, y: 500, r: 5 }];
-    separate(dots, 30, 6);
-    for (let i = 0; i < 3; i++) for (let j = i + 1; j < 3; j++) {
-      const need = Math.max(30, dots[i]!.r + dots[j]!.r + 6);
-      expect(Math.hypot(dots[i]!.x - dots[j]!.x, dots[i]!.y - dots[j]!.y)).toBeGreaterThanOrEqual(need - 1e-6);
-    }
-    expect(dots[3]).toEqual({ x: 500, y: 500, r: 5 });
-    const far = [{ x: 0, y: 0, r: 5 }, { x: 100, y: 0, r: 5 }];
-    separate(far, 30, 6);
-    expect(far).toEqual([{ x: 0, y: 0, r: 5 }, { x: 100, y: 0, r: 5 }]);
   });
 });
