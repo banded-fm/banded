@@ -35,6 +35,9 @@ export interface SceneCity {
 
 export interface ScenesData {
   generated_at?: string;
+  /** How each scene's artists are ordered: "known" (best known: Last.fm listeners, or estimated from Wikipedia
+   * languages) or "links" (most connected). */
+  artists_by?: "known" | "links";
   cities: SceneCity[];
 }
 

@@ -317,7 +317,9 @@ scripts/
 │                           banded-data ledger. Run after process_mb_dump.py.
 ├── find_scenes.py        — On demand: music scenes in every major city (--all) or one (--city): Louvain
 │                           groups of its artists by band ties, credits and shared bills; genres and
-│                           Last.fm tags for naming; placed at their central venue → scripts/data/scenes/.
+│                           Last.fm tags for naming; artists best known first (Last.fm listeners, else
+│                           Wikipedia languages from Wikidata: --fetch-wikipedias);
+│                           placed at their central venue → scripts/data/scenes/.
 │                           Tests: test_find_scenes.py (pytest).
 ├── seed_supabase.py      — Seeds Supabase Postgres with the same artists and edges, uncut (--dry-run counts rows).
 ├── crawl_setlistfm.py    — Daily crawl job for Setlist.fm venue data.

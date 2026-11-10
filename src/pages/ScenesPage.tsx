@@ -474,13 +474,15 @@ export function ScenesPage() {
           {!open ? "Tap a city" : showNames ? "Tap a scene, or the map to close the city" : "Zoom in to read the scene names"}
         </p>
         {error && <p role="alert" style={styles.error}>{error}</p>}
-        {selected && <ScenePanel scene={selected} onClose={() => select(null)} />}
+        {selected && <ScenePanel scene={selected} artistsBy={data?.artists_by} onClose={() => select(null)} />}
       </div>
     </div>
   );
 }
 
-function ScenePanel({ scene, onClose }: { scene: PlacedScene; onClose: () => void }) {
+function ScenePanel({ scene, artistsBy, onClose }: {
+  scene: PlacedScene; artistsBy: ScenesData["artists_by"]; onClose: () => void;
+}) {
   const where = [scene.location.venue, scene.location.place].filter(Boolean).join(", ");
   return (
     <aside className="scene-panel" style={styles.panel} aria-label={scene.name}>
@@ -501,7 +503,8 @@ function ScenePanel({ scene, onClose }: { scene: PlacedScene; onClose: () => voi
       </dl>
       {scene.genres.length > 0 && <Chips label="Genres" items={scene.genres} />}
       {scene.tags.length > 0 && <Chips label="Last.fm tags" items={scene.tags} />}
-      <h3 style={styles.heading}>Most connected artists</h3>
+      {/* Best known first when the scenes were found with Last.fm or Wikipedia counts; else most connected. */}
+      <h3 style={styles.heading}>{artistsBy === "known" ? "Best-known artists" : "Most connected artists"}</h3>
       <ul style={styles.artists}>
         {scene.artists.map(([id, name]) => <li key={id} style={styles.artist}>{name}</li>)}
       </ul>

@@ -76,8 +76,27 @@ npm run upload-scenes                                    # → cdn.banded.fm/sce
 ```
 
 `--app` writes the map's file (`public/scenes.json`, gitignored, ~2.8 MB,
-~1.2 MB gzipped): each scene without its full artist list (its 12 most
-connected artists as `[id, name]`) and with genre and tag names only. The
+~1.2 MB gzipped): each scene without its full artist list (its first 12
+artists as `[id, name]`) and with genre and tag names only. A scene's artists
+are listed best known first: by Last.fm listeners (`--lastfm`), and for artists
+the 2019 Last.fm data doesn't have, by what their Wikipedia languages are
+typically worth in listeners (`scripts/data/wikipedias.csv`, below); artists
+with neither follow, most connected first. Without either source, most
+connected first. The file's `artists_by` says which (`known` or `links`).
+
+`--fetch-wikipedias` asks Wikidata, by MusicBrainz ID, in how many Wikipedia
+languages each of the graph's artists has an article, counting only music
+people: bands and other groups, and people whose occupation is a kind of
+musician, composer, singer, songwriter, DJ, record producer or rapper (so the
+novelists and actors MusicBrainz credits on songs and soundtracks don't top a
+scene). It saves the answers to `scripts/data/wikipedias.csv` (gitignored; 0
+for no article or not a music person) and later asks only about new artists:
+the first run takes about 45 minutes, in batches of 500 IDs. The listeners a
+number of languages is worth is the median for artists with both, by bucket
+(1, 2, 3, 4–5, 6–7, ... 80+), never less than a smaller bucket's, worked out
+separately for people and for groups: a band member has many articles but
+Last.fm gives the band the listeners (20+ languages: ~26,000 listeners for a
+person, ~310,000 for a group). The
 page loads `scenes.json` next to the app first (local dev), then from the CDN
 next to the graph.
 
@@ -147,7 +166,9 @@ Each city in the JSON has `id`, `city`, `state`, `country`, `centre`,
 `peak`, `label`, `decades`, `dated_artists`), `top_genres`,
 `distinctive_genres` (share, lift), `places`, `lastfm` (`top_tags`,
 `distinctive_tags`, `place_tags`, `most_listened`) and `artists` (`id`,
-`name`, `type`, `links`, `local`).
+`name`, `type`, `links`, `local`, and with Last.fm or Wikipedia counts
+`listeners`, `wikipedias` and `known`, the listeners used to rank), best known
+first.
 
 Limits: an era describes a scene but doesn't split one that spans
 generations; an artist is in one scene at most; an area that

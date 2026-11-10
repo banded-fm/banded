@@ -20,7 +20,15 @@ Inputs:
   - optional: Last.fm's tags and listener counts per MusicBrainz ID, from the
     "Music artists popularity" Kaggle dataset (2019; artists.csv or its zip),
     to describe each scene in listeners' words ("bay area thrash", "paisley
-    underground"). Not committed; pass --lastfm or set $LASTFM_ARTISTS;
+    underground") and to list its best-known artists first (by listeners).
+    Not committed; pass --lastfm or set $LASTFM_ARTISTS;
+  - optional: in how many Wikipedia languages each artist has an article,
+    counting only music people (bands, and people with a music occupation:
+    not the novelists and actors MusicBrainz credits), from Wikidata by
+    MusicBrainz ID (scripts/data/wikipedias.csv; --fetch-wikipedias asks
+    Wikidata about the graph's artists it hasn't asked about yet, ~1 hour the
+    first time). For artists the 2019 Last.fm data doesn't have (half of them),
+    it gives the listeners artists with as many Wikipedias typically have;
   - MusicBrainz's area tree (scripts/data/mbdump: artist, area, l_area_area,
     link, link_type), so an area is placed in its state and country
     (Aberdeen, Washington, not Aberdeen, Scotland), and when artists started
@@ -123,6 +131,7 @@ DEFAULT_GRAPH = ROOT / "public" / "graph.db.gz"
 DEFAULT_SHOWS = Path(os.environ.get("CONCERTDB_SHOWS")
                      or Path.home() / "banded-data" / "data" / "export" / "shows.csv")
 DEFAULT_LASTFM = os.environ.get("LASTFM_ARTISTS")
+DEFAULT_WIKIPEDIAS = Path(os.environ.get("WIKIPEDIAS") or ROOT / "scripts" / "data" / "wikipedias.csv")
 DEFAULT_OUT_DIR = ROOT / "scripts" / "data" / "scenes"
 DEFAULT_MBDUMP = ROOT / "scripts" / "data" / "mbdump"
 
@@ -150,6 +159,15 @@ PLACE_LOCATION_SHARE = 0.3
 MIN_SHARED_BILLS = 3
 MIN_SHOWS = 5
 LASTFM_TAGS = 10           # tags per artist (Last.fm lists them most-used first)
+WIKIDATA_SPARQL = "https://query.wikidata.org/sparql"
+WIKIDATA_BATCH = 500       # MusicBrainz IDs per query: ~7 s each
+# A music person: anything but a human (a band, orchestra, duo...), or a human whose occupation is (a kind of)
+# musician, composer, singer, songwriter, disc jockey, record producer or rapper.
+MUSIC_OCCUPATIONS = ("Q639669", "Q36834", "Q177220", "Q753110", "Q130857", "Q183945", "Q2252262")
+# Wikipedia-language buckets (lower bounds) for estimating listeners, and the fewest artists with both a
+# bucket needs to count.
+WIKI_BUCKETS = (1, 2, 3, 4, 6, 8, 10, 15, 20, 30, 40, 60, 80)
+WIKI_MIN_ARTISTS = 20
 
 # MusicBrainz often names a city in its own language; venues use the English name.
 AREA_ALIASES = {
@@ -391,6 +409,129 @@ def _fetch(mbdump: str | Path, archive: str, tables: tuple[str, ...]) -> list[st
                 if not want:
                     break
     return got
+def _wikidata_query(mbids: list[str]) -> str:
+    music = " ".join(f"wd:{q}" for q in MUSIC_OCCUPATIONS)
+    return ("SELECT ?mbid (COUNT(DISTINCT ?article) AS ?wikipedias) WHERE { "
+            f"VALUES ?mbid {{ {' '.join(chr(34) + m + chr(34) for m in mbids)} }} ?item wdt:P434 ?mbid . "
+            "FILTER EXISTS { { ?item wdt:P31 ?t . FILTER(?t != wd:Q5) } UNION "
+            f"{{ ?item wdt:P106 ?occ . VALUES ?m {{ {music} }} ?occ wdt:P279* ?m . }} }} "
+            "?article schema:about ?item ; schema:isPartOf ?site . "
+            'FILTER(CONTAINS(STR(?site), ".wikipedia.org")) } GROUP BY ?mbid')
+
+
+def _wikipedia_counts(mbids: list[str], tries: int = 4) -> dict:
+    import time
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+    body = urllib.parse.urlencode({"query": _wikidata_query(mbids)}).encode()
+    headers = {"Accept": "text/csv", "Content-Type": "application/x-www-form-urlencoded",
+               "User-Agent": "Banded/0.1 (https://banded.fm; https://github.com/banded-fm/banded)"}
+    for attempt in range(tries):
+        try:
+            with urllib.request.urlopen(urllib.request.Request(WIKIDATA_SPARQL, data=body, headers=headers),
+                                        timeout=90) as resp:
+                text = resp.read().decode("utf-8")
+            rows = list(csv.DictReader(io.StringIO(text)))
+            if text.startswith("mbid,"):
+                return {r["mbid"]: int(r["wikipedias"]) for r in rows}
+            raise ValueError(f"unexpected answer: {text[:80]!r}")
+        except (urllib.error.URLError, TimeoutError, ValueError) as e:   # HTTPError (429, 5xx) is a URLError
+            if attempt == tries - 1:
+                raise
+            time.sleep(10 * (attempt + 1))
+    return {}
+
+
+def fetch_wikipedias(mbids, path: str | Path = DEFAULT_WIKIPEDIAS, batch: int = WIKIDATA_BATCH, log=print) -> int:
+    """Ask Wikidata, for each MusicBrainz artist ID not yet in `path`, in how many Wikipedia languages its artist
+    has an article, if it's a music person (see MUSIC_OCCUPATIONS), and append the answers (mbid,wikipedias; 0
+    for none or not a music person). An interrupted fetch resumes; a later one asks only about new artists.
+    Returns how many were asked about."""
+    path = Path(path)
+    done = set(read_wikipedias(path)) if path.exists() else set()
+    todo = sorted(set(mbids) - done)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not path.exists():
+        path.write_text("mbid,wikipedias\n")
+    for i in range(0, len(todo), batch):
+        part = todo[i:i + batch]
+        counts = _wikipedia_counts(part)
+        with open(path, "a", newline="") as f:
+            csv.writer(f).writerows((m, counts.get(m, 0)) for m in part)
+        if (i // batch) % 20 == 19 or i + batch >= len(todo):
+            log(f"wikidata: {min(i + batch, len(todo)):,} of {len(todo):,} artists")
+    return len(todo)
+
+
+def read_wikipedias(path: str | Path) -> dict:
+    """mbid -> Wikipedia languages (0 for none or not a music person), from fetch_wikipedias' file."""
+    with open(path, newline="") as f:
+        return {r["mbid"]: int(r["wikipedias"]) for r in csv.DictReader(f)}
+
+
+def wikipedia_listeners(lastfm: dict, wikipedias: dict, min_artists: int = WIKI_MIN_ARTISTS) -> list:
+    """What a number of Wikipedia languages is worth in Last.fm listeners: for each of WIKI_BUCKETS with enough
+    artists who have both, their median listeners, and never less than a smaller bucket's. [(languages, listeners)]
+    ascending."""
+    by_bucket = defaultdict(list)
+    for m, w in wikipedias.items():
+        listeners = lastfm.get(m, (0, []))[0]
+        if w > 0 and listeners > 0:
+            by_bucket[max(b for b in WIKI_BUCKETS if b <= w)].append(listeners)
+    table, best = [], 0
+    for b in WIKI_BUCKETS:
+        if len(by_bucket[b]) >= min_artists:
+            best = max(best, int(statistics.median(by_bucket[b])))
+            table.append((b, best))
+    return table
+
+
+class Renown:
+    """How well known each artist is, in Last.fm listeners: its own count; else, from its Wikipedia languages,
+    what artists of its kind with as many typically have (wikipedia_listeners); else 0. With only Wikipedia
+    counts, the count itself. Kinds (`types`: mbid -> "person" or "group") are converted separately: a band
+    member's articles are many but Last.fm gives the band the listeners, so a person in 20 Wikipedias typically
+    has ~26,000 listeners and a band ~310,000."""
+
+    def __init__(self, lastfm: dict | None = None, wikipedias: dict | None = None, types: dict | None = None,
+                 min_artists: int = WIKI_MIN_ARTISTS):
+        self.lastfm, self.wikipedias, self.types = lastfm, wikipedias, types
+        self.tables = {}
+        if lastfm and wikipedias:
+            for kind in (("person", "group") if types else ("all",)):
+                mine = {m: w for m, w in wikipedias.items() if self._kind(m) == kind}
+                self.tables[kind] = wikipedia_listeners(lastfm, mine, min_artists)
+
+    def _kind(self, m: str) -> str:
+        if not self.types:
+            return "all"
+        return "person" if self.types.get(m) == "person" else "group"
+
+    def __bool__(self) -> bool:
+        return self.lastfm is not None or self.wikipedias is not None
+
+    def score(self, m: str) -> int:
+        listeners = self.lastfm.get(m, (0, []))[0] if self.lastfm is not None else 0
+        if listeners:
+            return listeners
+        w = (self.wikipedias or {}).get(m, 0)
+        if not w:
+            return 0
+        if self.lastfm is None:
+            return w
+        return next((v for b, v in reversed(self.tables.get(self._kind(m), [])) if b <= w), 0)
+
+    def fields(self, m: str) -> dict:
+        out = {}
+        if self.lastfm is not None:
+            out["listeners"] = self.lastfm.get(m, (0, []))[0]
+        if self.wikipedias is not None:
+            out["wikipedias"] = self.wikipedias.get(m, 0)
+        out["known"] = self.score(m)
+        return out
+
+
 PART_OF = "part of"
 
 
@@ -781,9 +922,11 @@ def home_cities(shows: Shows, graph: Graph, areas: Areas | None = None) -> dict:
 
 def find(shows: Shows, graph: Graph, metro: Metro, extra_areas: tuple[str, ...] = (), lastfm: dict | None = None,
          min_size: int = MIN_SIZE, resolution: float = RESOLUTION, seed: int = SEED, homes: dict | None = None,
-         claimed: set | None = None, years: Years | None = None) -> dict:
+         claimed: set | None = None, years: Years | None = None, renown: Renown | None = None) -> dict:
     """One metro's scenes, as a JSON-ready dict. homes: home_cities(), computed once for many metros.
-    claimed: the city keys every metro counts (cities and nearby towns), for adoption; default this one's."""
+    claimed: the city keys every metro counts (cities and nearby towns), for adoption; default this one's.
+    renown: how well known artists are, to list each scene's best known first; default from lastfm."""
+    renown = renown if renown is not None else Renown(lastfm)
     nodes = graph.nodes
     homes = home_cities(shows, graph) if homes is None else homes
     extra = {area_key(a) for a in extra_areas}
@@ -877,7 +1020,7 @@ def find(shows: Shows, graph: Graph, metro: Metro, extra_areas: tuple[str, ...] 
             insides[best][m] = c[best]
     for core, inside in zip(cores, insides):
         if len(core) >= min_size:
-            scenes.append(_describe(core, inside, graph, base, metro, bills_here, lastfm, how, years))
+            scenes.append(_describe(core, inside, graph, base, metro, bills_here, lastfm, how, years, renown))
     scenes.sort(key=lambda s: -s["weight"])
     used: Counter = Counter()
     mid = metro_id(metro)
@@ -969,16 +1112,20 @@ def _style_tags(tags: list, place_words) -> list[str]:
     return out
 
 
-def _describe(core, inside, graph: Graph, base: _Baseline, metro: Metro, bills_here, lastfm, how, years) -> dict:
+def _describe(core, inside, graph: Graph, base: _Baseline, metro: Metro, bills_here, lastfm, how, years,
+              renown: Renown | None = None) -> dict:
     nodes = graph.nodes
-    has = [m for m in core if nodes[m][3]]
+    # Sorted, so ties (in genres, home places, tags) break the same way every run: a set's order changes
+    # from run to run with Python's hash seed.
+    has = [m for m in sorted(core) if nodes[m][3]]
     gc = Counter(graph.genre_name.get(g, str(g)) for m in has for g in set(nodes[m][3]))
     gbase = Counter({graph.genre_name.get(g, str(g)): k for g, k in base.genres.items()})
     top_genres, distinctive = _ranked(gc, len(has), gbase, base.with_genres)
 
     # Places within the city the artists come from (narrower than the city itself).
     city = norm(metro.name)
-    homes = Counter(nodes[m][2] for m in core if area_key(nodes[m][2]) in metro.places and area_key(nodes[m][2]) != city)
+    homes = Counter(nodes[m][2] for m in sorted(core)
+                    if area_key(nodes[m][2]) in metro.places and area_key(nodes[m][2]) != city)
     narrow = sum(homes.values())
     home, home_n = homes.most_common(1)[0] if homes else (None, 0)
     place_name = home if home and home_n >= PLACE_NAME_SHARE * narrow and home_n >= 3 else metro.name
@@ -1008,14 +1155,18 @@ def _describe(core, inside, graph: Graph, base: _Baseline, metro: Metro, bills_h
                     "place": metro.name, "spread_km": None, "venues": []}
     location["lat"], location["lon"] = round(location["lat"], 5), round(location["lon"], 5)
 
-    artists = sorted(core, key=lambda m: (-inside[m], nodes[m][0]))
+    # Best known first (Renown: Last.fm listeners, or estimated from Wikipedia languages); then most links.
+    renown = renown or Renown()
+    known = renown.score if renown else (lambda m: 0)
+    artists = sorted(core, key=lambda m: (-known(m), -inside[m], nodes[m][0], m))
     scene = {
         "name": None, "_place": place_name, "size": len(core), "weight": sum(inside[m] for m in core) // 2,
         "location": location,
         "era": era_of(core, years, inside) if years else None,
         "top_genres": top_genres, "distinctive_genres": distinctive,
         "places": [[p, k] for p, k in homes.most_common(5)],
-        "artists": [{"id": m, "name": nodes[m][0], "type": nodes[m][1], "links": inside[m], "local": how[m]}
+        "artists": [{"id": m, "name": nodes[m][0], "type": nodes[m][1], "links": inside[m], "local": how[m],
+                     **(renown.fields(m) if renown else {})}
                     for m in artists],
     }
     if lastfm is not None:
@@ -1024,8 +1175,8 @@ def _describe(core, inside, graph: Graph, base: _Baseline, metro: Metro, bills_h
 
 
 def _lastfm_summary(core, nodes, lastfm, base: _Baseline) -> dict:
-    tagged = [m for m in core if lastfm.get(m, (0, []))[1]]
-    tc = Counter(t for m in tagged for t in set(lastfm[m][1]) if t not in GENERIC_TAGS)
+    tagged = [m for m in sorted(core) if lastfm.get(m, (0, []))[1]]
+    tc = Counter(t for m in tagged for t in dict.fromkeys(lastfm[m][1]) if t not in GENERIC_TAGS)
     top, distinctive = _ranked(tc, len(tagged), base.tags, base.with_tags, limit=8)
     places = Counter({t: k for t, k in tc.items()
                       if re.search(r"\bscene\b", t) or (k >= 2 and base.place_words and base.place_words.search(t)
@@ -1051,8 +1202,10 @@ APP_ARTISTS = 12           # artists per scene in the app's file
 
 
 def app_data(cities: list[dict], meta: dict) -> dict:
-    """The scenes for the app's map (src/scenes/sceneMap.ts): each scene without its full artist list (its
-    APP_ARTISTS most connected, as [id, name]) and with genre and tag names only. ~3 MB instead of ~26."""
+    """The scenes for the app's map (src/scenes/sceneMap.ts): each scene without its full artist list (its first
+    APP_ARTISTS, as [id, name]: best known with Last.fm or Wikipedia counts, else most connected; `artists_by`
+    says which) and with
+    genre and tag names only. ~3 MB instead of ~26."""
     def scene(s):
         era = s.get("era")
         return {
@@ -1063,7 +1216,8 @@ def app_data(cities: list[dict], meta: dict) -> dict:
             "tags": [t for t, *_ in s["lastfm"]["distinctive_tags"][:5]] if s.get("lastfm") else [],
             "artists": [[a["id"], a["name"]] for a in s["artists"][:APP_ARTISTS]],
         }
-    return {**meta, "cities": [{"id": c["id"], "city": c["city"], "country": c["country"], "centre": c["centre"],
+    return {**meta, "artists_by": "known" if meta.get("lastfm") or meta.get("wikipedias") else "links",
+            "cities": [{"id": c["id"], "city": c["city"], "country": c["country"], "centre": c["centre"],
                                 "scenes": [scene(s) for s in c["scenes"]]} for c in cities]}
 
 
@@ -1096,6 +1250,11 @@ def main(argv=None) -> None:
     p.add_argument("--lastfm", default=DEFAULT_LASTFM,
                    help="Last.fm tags: the Kaggle 'Music artists popularity' artists.csv or its zip"
                         " (default $LASTFM_ARTISTS; optional)")
+    p.add_argument("--wikipedias", default=str(DEFAULT_WIKIPEDIAS),
+                   help="Wikipedia languages per artist, from --fetch-wikipedias (default $WIKIPEDIAS, else"
+                        " scripts/data/wikipedias.csv; used if it exists)")
+    p.add_argument("--fetch-wikipedias", action="store_true",
+                   help="first ask Wikidata about the graph's artists not yet in --wikipedias (~1 hour the first time)")
     p.add_argument("--radius-km", type=float, default=RADIUS_KM)
     p.add_argument("--nearby-km", type=float, default=NEARBY_KM,
                    help=f"towns in no metro count for the nearest within this (default {NEARBY_KM})")
@@ -1120,6 +1279,10 @@ def main(argv=None) -> None:
     try:
         graph = load_graph(conn)
         lastfm = read_lastfm(args.lastfm, set(graph.nodes)) if args.lastfm else None
+        if args.fetch_wikipedias:
+            print(f"asked Wikidata about {fetch_wikipedias(graph.nodes, args.wikipedias):,} artists")
+        wikipedias = read_wikipedias(args.wikipedias) if Path(args.wikipedias).exists() else None
+        renown = Renown(lastfm, wikipedias, {m: n[1] for m, n in graph.nodes.items()})
         areas = read_areas(args.mbdump, {m: n[2] for m, n in graph.nodes.items() if n[2]})
         metros = major_metros(shows, args.min_shows, args.radius_km)
         if not args.all:
@@ -1132,14 +1295,15 @@ def main(argv=None) -> None:
         homes = home_cities(shows, graph, areas)
         years = read_years(args.mbdump, set(graph.nodes))
         cities = [find(shows, graph, m, extra_areas=tuple(args.area), lastfm=lastfm, min_size=args.min_size,
-                       resolution=args.resolution, homes=homes, claimed=claimed, years=years)
+                       resolution=args.resolution, homes=homes, claimed=claimed, years=years, renown=renown)
                   for m in (metros if args.all else metros[:1])]
     finally:
         conn.close()
         if tmp:
             tmp.unlink(missing_ok=True)
     meta = {"generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-            "graph_built_at": graph.built_at, "lastfm": Path(args.lastfm).name if args.lastfm else None}
+            "graph_built_at": graph.built_at, "lastfm": Path(args.lastfm).name if args.lastfm else None,
+            "wikipedias": Path(args.wikipedias).name if wikipedias is not None else None}
     result = {**meta, "cities": cities} if args.all else {**meta, **cities[0]}
     out = write(result, args.out or default_path(None if args.all else args.city))
     if args.app:
