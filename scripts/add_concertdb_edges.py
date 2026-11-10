@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Add "opened for" edges from banded-data to the browser graph.
 
-Reads the banded-data ledger (https://github.com/rahuljaisimha/banded-data)
+Reads the banded-data ledger (https://github.com/banded-fm/banded-data)
 directly and adds one edge per (opener, headliner) pair to public/graph.db.gz:
 
     edges(source = opener MBID, target = headliner MBID, rel_type = 'opened_for')

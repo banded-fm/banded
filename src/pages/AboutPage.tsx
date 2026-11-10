@@ -101,8 +101,8 @@ export function AboutPage() {
 
         <h2 style={styles.heading}>Source Code</h2>
         <p style={styles.paragraph}>
-          <a href="https://github.com/rahuljaisimha/banded" target="_blank" rel="noreferrer" style={styles.link}>
-            github.com/rahuljaisimha/banded
+          <a href="https://github.com/banded-fm/banded" target="_blank" rel="noreferrer" style={styles.link}>
+            github.com/banded-fm/banded
           </a>
         </p>
       </div>
