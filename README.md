@@ -37,7 +37,7 @@ The app opens on a home page with a one-line summary and a large button for each
 
 Search for any artist or group and visualize their network — group members, side projects, and supporting musicians rendered as an interactive force-directed graph. Click a node to see what MusicBrainz says about it (its disambiguation, its genres, and a link to its MusicBrainz page) and to explore further. The legend explains the colours and arrows, and its checkboxes add more kinds of connection: musicians who played or sang on an artist's records, producers, and acts that opened for them.
 
-As you type, a dropdown suggests matching artists from the app's database. Each one is labelled the way MusicBrainz does it, with its disambiguation in parentheses, e.g. **Fuzz** (US garage rock band), so you can pick the right one when several artists share a name. Artists MusicBrainz doesn't disambiguate (like Alex Turner) have no label. Artists the database doesn't have are looked up on MusicBrainz; picking one of those (or an Explore search that finds nothing) is logged, and [banded-data](https://github.com/rahuljaisimha/banded-data) crawls those artists' concerts so they join the graph at its next rebuild. The same dropdown is on Discover, Similarity and the custom game in Play, and everywhere the artist you pick is the one used, even when others share its name.
+As you type, a dropdown suggests matching artists from the app's database. Each one is labelled the way MusicBrainz does it, with its disambiguation in parentheses, e.g. **Fuzz** (US garage rock band), so you can pick the right one when several artists share a name. Artists MusicBrainz doesn't disambiguate (like Alex Turner) have no label. Artists the database doesn't have are looked up on MusicBrainz; picking one of those (or an Explore search that finds nothing) is logged, and [banded-data](https://github.com/banded-fm/banded-data) crawls those artists' concerts so they join the graph at its next rebuild. The same dropdown is on Discover, Similarity and the custom game in Play, and everywhere the artist you pick is the one used, even when others share its name.
 
 ## Six Degrees of Music (Game)
 
@@ -68,13 +68,13 @@ python3 scripts/process_mb_dump.py
 python3 scripts/add_concertdb_edges.py   # "opened for" links from banded-data
 ```
 
-`process_mb_dump.py` starts from ~145 curated artists and, when a local banded-data ledger is present, from every artist with a concert in it, and keeps the download under 74 MB. `add_concertdb_edges.py` reads a local [banded-data](https://github.com/rahuljaisimha/banded-data) ledger (`~/banded-data/data/ledger.sqlite`, or `--ledger` / `$CONCERTDB_LEDGER`) and adds an "opened for" link for every opener/headliner pair it has confirmed. It can be re-run on its own to refresh those links without rebuilding the graph.
+`process_mb_dump.py` starts from ~145 curated artists and, when a local banded-data ledger is present, from every artist with a concert in it, and keeps the download under 74 MB. `add_concertdb_edges.py` reads a local [banded-data](https://github.com/banded-fm/banded-data) ledger (`~/banded-data/data/ledger.sqlite`, or `--ledger` / `$CONCERTDB_LEDGER`) and adds an "opened for" link for every opener/headliner pair it has confirmed. It can be re-run on its own to refresh those links without rebuilding the graph.
 
 To see the debug log console, open the app with `?debug=1` or `?debug=true` in the URL, e.g. `http://localhost:5173/?debug=1` or `…/#/explore?debug=1`. It stays on while you navigate; reload without the flag to turn it off.
 
 ## Deploying
 
-The app is a static site, deployable to GitHub Pages or Cloudflare (Workers Builds). On Cloudflare the graph database is served from Cloudflare R2 (the file exceeds the 25 MiB static-asset cap). See [`docs/CDN_HOSTING.md`](docs/CDN_HOSTING.md) for setup.
+The app is a static site on Cloudflare (Workers Builds) at https://banded.fm. On Cloudflare the graph database is served from Cloudflare R2 (the file exceeds the 25 MiB static-asset cap). See [`docs/CDN_HOSTING.md`](docs/CDN_HOSTING.md) for setup.
 
 ## Contributing
 

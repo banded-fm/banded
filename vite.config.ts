@@ -9,7 +9,7 @@ export default defineConfig(({ mode }) => {
   // Base path precedence:
   //   1. Explicit DEPLOY_BASE env var (manual override, any host).
   //   2. Cloudflare build → "/" (workers.dev / pages.dev serve at root).
-  //   3. GitHub Pages production default → "/banded/".
+  //   3. Other production builds (the local preview) → "/banded/".
   //   4. Local dev → "/".
   const base =
     process.env.DEPLOY_BASE ??

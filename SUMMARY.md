@@ -2,9 +2,9 @@
 
 ## What this is
 
-A React app that visualizes music scene connections and includes a "Six Degrees of Music" game. Uses a precomputed SQLite database (from MusicBrainz data dumps) queried in the browser via WebAssembly. Deployed as a static site on GitHub Pages and/or Cloudflare (Workers Builds); see `docs/CDN_HOSTING.md`.
+A React app that visualizes music scene connections and includes a "Six Degrees of Music" game. Uses a precomputed SQLite database (from MusicBrainz data dumps) queried in the browser via WebAssembly. Deployed as a static site on Cloudflare (Workers Builds); see `docs/CDN_HOSTING.md`.
 
-The site is **Banded** (https://banded.fm); this repo is `rahuljaisimha/banded` (formerly Banded). Its data pipeline is `rahuljaisimha/banded-data`.
+The site is **Banded** (https://banded.fm); this repo is `banded-fm/banded` (moved from `rahuljaisimha/banded` in November 2026; the old URLs redirect). Its data pipeline is `banded-fm/banded-data`.
 
 The app opens on a **Home** page (no nav bar: a one-line summary and a large button per page). Features: **Explore** (graph visualization), **Play** (Six Degrees game), **Discover** (upcoming concert recommendations), and **Similarity** (score how closely an artist fits a set of artists you like, using weighted graph relationships). Discover lists upcoming Pollstar concerts at the city's top venues, streamed in as they're found and ranked by headliner similarity. Every artist input (Explore search, Discover/Similarity lists, Play's custom game) has a search-as-you-type dropdown that labels same-name artists with their MusicBrainz disambiguation: "Fuzz (US garage rock band)"; artists MusicBrainz doesn't disambiguate get no label.
 
@@ -358,9 +358,6 @@ public/
 ├── .assetsignore         — Keeps graph.db.gz out of the Cloudflare upload (25 MiB asset cap).
 └── sql-wasm.wasm         — sql.js WASM binary (committed, ~660KB).
 
-.github/workflows/
-└── deploy.yml            — GitHub Actions: build and deploy to GitHub Pages.
-
 wrangler.jsonc            — Cloudflare Workers config (static assets; `previews` block for PR builds).
 CLAUDE.md                 — Instructions for Claude Code sessions (imports this file).
 ```
@@ -423,10 +420,10 @@ CREATE TABLE graph_meta_added_nodes (value TEXT PRIMARY KEY); -- acts it added (
 - **Seed artists**: 148 recognizable artists (persons + iconic bands) at 6 hops, the game's puzzle endpoints; plus banded-data's artists (see "Seeds and size budget"). Listed once, in `src/game/artists.ts`, by MusicBrainz ID with the name for readability: names are ambiguous (several "Lemmy"s, five "Nirvana"s) or change ("Kanye West" is "Ye" on MusicBrainz), and the build used to pick an arbitrary namesake. The game resolves them by ID too; a seed missing from the dump is reported by the build.
 - **Concert ties from banded-data**: `scripts/add_concertdb_edges.py` reads the banded-data ledger (read-only; data flows one way, banded-data never reads the graph) and adds one `opened_for` edge per (opener, headliner) pair: both matched to MusicBrainz, not a festival, not cancelled, billing confidence ≥ 0.4. Every act in these pairs has a concert, so the build's banded-data seeds already put it in the graph; an act missing from an older or trimmed graph is added as a node (name, type, disambiguation; no area). `graphDb.getNeighbors` reports each edge's direction (`outgoing`) so Explore draws opener → headliner; Similarity weighs `opened_for` at 0.45 (placeholder, below band ties, above a single album credit) and labels "opened for / headlined". The game counts it as a move like every other link. Postgres (`graph-neighbors`) doesn't have these edges yet.
 - **Same-type pairs**: Game always pairs person↔person or group↔group.
-- **Vite base (host-aware)**: `vite.config.ts` sets `base` by precedence: explicit `DEPLOY_BASE` env var → Cloudflare build (`WORKERS_CI` from Workers Builds, or `CF_PAGES` from Pages) → `/` → GitHub Pages production default `/Banded/` → dev `/`. Cloudflare serves at the domain root, so the GitHub Pages base there causes a blank page (404'd assets) — hence the auto-detection. It also inlines the R2 graph URL on Cloudflare builds (see `__GRAPH_DB_CDN_URL__`), since static-assets-only Workers can't hold env vars.
+- **Vite base (host-aware)**: `vite.config.ts` sets `base` by precedence: explicit `DEPLOY_BASE` env var → Cloudflare build (`WORKERS_CI` from Workers Builds, or `CF_PAGES` from Pages) → `/` → other production builds (the local preview) `/banded/` → dev `/`. Cloudflare serves at the domain root, so the `/banded/` base there causes a blank page (404'd assets) — hence the auto-detection. It also inlines the R2 graph URL on Cloudflare builds (see `__GRAPH_DB_CDN_URL__`), since static-assets-only Workers can't hold env vars.
 - **graph.db.gz loader (local-first, CDN fallback)**: `graphDb.ts` tries the same-origin committed file first, then falls back to the CDN URL (`VITE_GRAPH_DB_URL` or the build-time `__GRAPH_DB_CDN_URL__`) if the local file is missing/HTML-fallback. On Cloudflare the local file is excluded from upload via `public/.assetsignore` (25 MiB asset cap), so it loads from R2.
 - **graph.db.gz committed to repo**: Deployed with the site, same origin = no CORS. Fits GitHub's 100MB file limit. **Cloudflare Pages caps static assets at 25 MiB**, below the file size — to deploy there, host `graph.db.gz` on a CDN and set `VITE_GRAPH_DB_URL` (see `docs/CDN_HOSTING.md`). `graphDb.ts` uses `VITE_GRAPH_DB_URL || same-origin file`. **GitHub Releases was tried and rejected**: release-asset URLs 302-redirect to `objects.githubusercontent.com` without reliable `Access-Control-Allow-Origin`, so cross-origin `fetch` fails CORS. Use Cloudflare R2 (free egress, controllable CORS policy, serves raw gzip bytes so the magic-number decompression path still works) or jsDelivr.
-- **Mostly client-side**: The site is static (GitHub Pages / Cloudflare) and graph queries run in the browser. Network calls are limited to Supabase edge functions (venue search, Tier-2 graph lookups, miss reporting), MusicBrainz (Tier-3 fallback) and Pollstar (concerts).
+- **Mostly client-side**: The site is static (Cloudflare) and graph queries run in the browser. Network calls are limited to Supabase edge functions (venue search, Tier-2 graph lookups, miss reporting), MusicBrainz (Tier-3 fallback) and Pollstar (concerts).
 - **No Spotify import**: removed. Since February 2026 Spotify's Development Mode allows at most 5 allow-listed users, and Extended Quota Mode is only for established businesses, so a public Spotify top-artists import isn't possible (the About page's FAQ explains this to users).
 - **Game persistence**: 24h in localStorage. New Game clears and regenerates.
 - **Remembered choices**: the liked artists (`likedArtists`: one list for Similarity and Discover, saved on every change, MBIDs kept) and Discover's last searched city (`discover.city`, saved when a search finds it) stay in localStorage in this browser. Unreadable saved data is ignored.
@@ -518,7 +515,7 @@ artists' concerts first, so they join the graph at the next rebuild:
 
 ## Deploying
 
-**Frontend (GitHub Pages)**: Push to `main`. GitHub Actions builds and deploys to Pages automatically (base `/banded/`, graph served same-origin).
+**GitHub Pages**: no longer used. Its deploy workflow was removed and Pages is off for the repo (November 2026); banded.fm on Cloudflare is the only site.
 
 **Frontend (Cloudflare, Workers Builds)**: Build command `npm run build`, deploy `npx wrangler deploy`, output `dist`. No env vars needed — the build auto-detects Cloudflare (`WORKERS_CI`) to set base `/` and inline the R2 graph URL. `public/.assetsignore` keeps the oversized `graph.db.gz` out of the upload (25 MiB cap); the app loads it from R2. R2 bucket needs public access + a CORS policy allowing the site origins. Full setup in `docs/CDN_HOSTING.md`.
 

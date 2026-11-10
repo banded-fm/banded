@@ -49,7 +49,7 @@ serve(async (req) => {
         // Fallback: resolve via MusicBrainz API
         const mbResponse = await fetch(
           `https://musicbrainz.org/ws/2/artist?query=artist:"${encodeURIComponent(artistName)}"&limit=5&fmt=json`,
-          { headers: { "User-Agent": "MusicSceneMap/0.1 (https://github.com/rahuljaisimha/MusicSceneMap)" } }
+          { headers: { "User-Agent": "Banded/0.1 (https://github.com/banded-fm/banded)" } }
         );
 
         if (mbResponse.ok) {

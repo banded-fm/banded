@@ -735,7 +735,7 @@ def build_collaborations(
 
 # Curated seed artists: the Six Degrees game's list (src/game/artists.ts), by
 # MusicBrainz ID; plus the artists with concerts in banded-data
-# (https://github.com/rahuljaisimha/banded-data), read from its ledger. The
+# (https://github.com/banded-fm/banded-data), read from its ledger. The
 # graph is every artist within a seed's hop budget over band relationships
 # (member of / supporting musician).
 GAME_ARTISTS_FILE = PROJECT_DIR / "src" / "game" / "artists.ts"
