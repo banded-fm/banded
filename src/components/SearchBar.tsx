@@ -41,7 +41,7 @@ export function SearchBar({ onSearch, loading, prefill, onPrefillConsumed, onRes
             setQuery(s.name);
             onSearch(s.name, s.id);
           }}
-          placeholder="Search an artist (e.g. Ty Segall, Osees)"
+          placeholder="Search an artist"
           disabled={loading}
           inputClassName={highlightKey > 0 ? "search-input-highlight" : ""}
           inputStyle={styles.input}
