@@ -299,6 +299,83 @@ def test_lastfm(conn, shows_csv, lastfm_zip):
     assert "seen live" not in [t for t, _ in lf["top_tags"]]
     assert ["la punk scene", 6] in lf["place_tags"]
     assert lf["most_listened"][0] == ["P Band", 10000]
+    # Artists best known first: by listeners (p0 has the most), then those Last.fm doesn't have, by links.
+    ids = [a["id"] for a in punk["artists"]]
+    known = [i for i in ids if i in lastfm]
+    assert known == sorted(known, key=lambda i: -lastfm[i][0]) and ids[:len(known)] == known
+    rest = punk["artists"][len(known):]
+    assert [a["links"] for a in rest] == sorted((a["links"] for a in rest), reverse=True)
+    assert punk["artists"][0]["listeners"] == 10000 and all("listeners" in a for a in punk["artists"])
+    assert punk["artists"][0]["known"] == 10000 and "wikipedias" not in punk["artists"][0]
+    # Without Last.fm: most links first, and no listeners.
+    plain = next(s for s in _la(shows_csv, conn)["scenes"] if s["name"] == "Los Angeles punk")
+    assert [a["links"] for a in plain["artists"]] == sorted((a["links"] for a in plain["artists"]), reverse=True)
+    assert all("listeners" not in a for a in plain["artists"])
+
+
+def test_wikipedia_listeners_and_renown():
+    lastfm = {f"a{i}": (100 * (i + 1), []) for i in range(6)}      # a0..a5: 100..600 listeners
+    wikis = {"a0": 1, "a1": 1, "a2": 1, "a3": 5, "a4": 5, "a5": 5, # 1 Wikipedia: 100-300; 4-5: 400-600
+             "w": 5, "big": 90, "none": 0}
+    table = fs.wikipedia_listeners(lastfm, wikis, min_artists=3)
+    assert table == [(1, 200), (4, 500)]                          # medians, by bucket
+    # Never less than a smaller bucket's: a bigger bucket with a lower median takes the smaller's.
+    assert fs.wikipedia_listeners({**lastfm, "b": (1, []), "c": (1, []), "d": (1, [])},
+                                  {**wikis, "b": 20, "c": 20, "d": 20}, min_artists=3)[-1] == (20, 500)
+    r = fs.Renown(lastfm, wikis, min_artists=3)
+    assert r.score("a5") == 600                                    # its own listeners
+    assert r.score("w") == 500 and r.score("big") == 500           # estimated from Wikipedias (top bucket for 90)
+    assert r.score("none") == 0 and r.score("unknown") == 0
+    assert r.fields("w") == {"listeners": 0, "wikipedias": 5, "known": 500}
+    only_wiki = fs.Renown(None, wikis)                             # no Last.fm: the count itself
+    assert only_wiki.score("big") == 90 and only_wiki.fields("big") == {"wikipedias": 90, "known": 90}
+    assert not fs.Renown() and fs.Renown(lastfm)
+    # People and groups are converted separately: here a person's 5 Wikipedias are worth less than a group's.
+    types = {"a0": "person", "a1": "person", "a2": "person", "a3": "person", "a4": "group", "a5": "group",
+             "w": "person", "g": "group"}
+    kinds = fs.Renown({**lastfm, "a4": (5000, []), "a5": (6000, []), "x": (7000, [])},
+                      {**wikis, "a3": 5, "g": 5, "x": 5}, {**types, "x": "group"}, min_artists=2)
+    # People: 1 Wikipedia is worth 200 (a0-a2); a3 alone is too few for the 4-5 bucket. Groups: a4, a5, x.
+    assert kinds.tables["person"] == [(1, 200)] and kinds.tables["group"] == [(4, 6000)]
+    assert kinds.score("w") == 200 and kinds.score("g") == 6000
+
+
+def test_scene_artists_by_wikipedias(conn, shows_csv, lastfm_zip):
+    """An artist Last.fm doesn't have ranks by what its Wikipedia languages are worth in listeners."""
+    lastfm = fs.read_lastfm(lastfm_zip)
+    plain = next(s for s in _la(shows_csv, conn, lastfm=lastfm)["scenes"] if s["name"] == "Los Angeles punk")
+    unknown = next(a["id"] for a in plain["artists"] if not a["listeners"])
+    # p0..p7 have 10,000..3,000 listeners and 1 Wikipedia each, so 1 Wikipedia (or 2 or 3) is worth their median.
+    wikis = {**{f"p{i}": 1 for i in range(8)}, unknown: 3}
+    r = fs.Renown(lastfm, wikis, min_artists=5)
+    punk = next(s for s in _la(shows_csv, conn, lastfm=lastfm, renown=r)["scenes"] if s["name"] == "Los Angeles punk")
+    ids = [a["id"] for a in punk["artists"]]
+    assert ids.index(unknown) == 4                                # after p0..p3 (10,000..7,000), before p4 (6,000)
+    a = punk["artists"][4]
+    assert a["listeners"] == 0 and a["wikipedias"] == 3 and a["known"] == 6500
+
+
+def test_fetch_wikipedias(tmp_path, monkeypatch):
+    """Asks Wikidata in batches about artists not yet in the file, appending 0 for those with no article."""
+    import io
+    import urllib.parse
+    import urllib.request
+    asked = []
+
+    def fake_urlopen(req, timeout=None):
+        query = urllib.parse.parse_qs(req.data.decode())["query"][0]
+        assert "wdt:P434" in query and "wd:Q639669" in query and "wikipedia.org" in query
+        ids = [m for m in ("m1", "m2", "m3", "m4") if f'"{m}"' in query]
+        asked.append(ids)
+        body = "mbid,wikipedias\r\n" + "".join(f"{m},{n}\r\n" for m, n in (("m1", 12), ("m3", 2)) if m in ids)
+        return io.BytesIO(body.encode())
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    path = tmp_path / "wikipedias.csv"
+    assert fs.fetch_wikipedias(["m1", "m2", "m3"], path, batch=2, log=lambda *_: None) == 3
+    assert asked == [["m1", "m2"], ["m3"]]
+    assert fs.read_wikipedias(path) == {"m1": 12, "m2": 0, "m3": 2}
+    assert fs.fetch_wikipedias(["m1", "m2", "m3", "m4"], path, batch=2, log=lambda *_: None) == 1   # only m4
+    assert asked[-1] == ["m4"] and fs.read_wikipedias(path)["m4"] == 0
 
 
 def test_names():
@@ -327,7 +404,7 @@ def test_main(conn, shows_csv, lastfm_zip, tmp_path, capsys):
     assert data["city"] == "Los Angeles" and len(data["scenes"]) == 2 and data["graph_built_at"] == "2026-11-01"
     out = tmp_path / "all.json"
     fs.main(["--all", "--min-shows", "1", "--graph", graph, "--shows", str(shows_csv), "--lastfm", str(lastfm_zip),
-             "--out", str(out)])
+             "--out", str(out), "--wikipedias", str(tmp_path / "none.csv")])
     data = json.loads(out.read_text())
     assert data["lastfm"] == "archive.zip" and data["cities"][0]["city"] == "Los Angeles"
     assert "lastfm" in data["cities"][0]["scenes"][0]
@@ -431,8 +508,9 @@ def test_app_file(conn, shows_csv, tmp_path):
     conn.close()
     app = tmp_path / "public" / "scenes.json"
     fs.main(["--all", "--min-shows", "1", "--graph", str(tmp_path / "graph.db"), "--shows", str(shows_csv),
-             "--out", str(tmp_path / "all.json"), "--app", str(app)])
+             "--out", str(tmp_path / "all.json"), "--app", str(app), "--wikipedias", str(tmp_path / "none.csv")])
     data = json.loads(app.read_text())
+    assert data["artists_by"] == "links"                                   # no --lastfm or Wikipedias
     la = data["cities"][0]
     punk = next(s for s in la["scenes"] if s["name"] == "Los Angeles punk")
     assert set(la) == {"id", "city", "country", "centre", "scenes"}
