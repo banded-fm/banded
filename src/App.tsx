@@ -19,7 +19,7 @@ const router = createHashRouter([
       { path: "/discover", element: <DiscoverPage /> },
       { path: "/similarity", element: <SimilarityPage /> },
       { path: "/about", element: <AboutPage /> },
-      // In development: not in the menu (Layout's NAV_ITEMS). Loaded on demand, with the map library.
+      // Loaded on demand, with the map library.
       { path: "/scenes", lazy: () => import("./pages/ScenesPage").then((m) => ({ Component: m.ScenesPage })) },
       { path: "*", element: <Navigate to="/" replace /> },
     ],

@@ -4,20 +4,17 @@ import { SiteFooter } from "./SiteFooter";
 
 const NAV_ITEMS = [
   { to: "/explore", label: "Explore" },
+  { to: "/scenes", label: "Scenes" },
   { to: "/play", label: "Play" },
   { to: "/discover", label: "Discover" },
   { to: "/similarity", label: "Similarity" },
   { to: "/about", label: "About" },
 ];
-// Pages reachable by URL but not listed in the menu yet (in development). Their name shows in the bar on every
-// screen size (there's no tab to highlight), with a badge.
-const HIDDEN_ITEMS = [{ to: "/scenes", label: "Scenes", badge: "Preview" }];
 
 export function Layout() {
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
-  const hidden = HIDDEN_ITEMS.find((item) => item.to === location.pathname);
-  const current = NAV_ITEMS.find((item) => item.to === location.pathname) ?? hidden;
+  const current = NAV_ITEMS.find((item) => item.to === location.pathname);
 
   // Close the mobile menu after navigating
   useEffect(() => {
@@ -42,13 +39,8 @@ export function Layout() {
     <>
       <nav className="app-nav" style={styles.nav}>
         <Link to="/" viewTransition className="nav-brand" style={styles.brand} aria-label="Banded home">Banded</Link>
-        {/* Mobile only (see index.css): current tab + hamburger toggle. A hidden page's name shows everywhere. */}
-        {current && (
-          <span className={`nav-current${hidden ? " nav-current-shown" : ""}`} style={styles.current}>
-            {current.label}
-            {hidden && <span className="nav-badge" style={styles.badge}>{hidden.badge}</span>}
-          </span>
-        )}
+        {/* Mobile only (see index.css): current tab + hamburger toggle */}
+        {current && <span className="nav-current" style={styles.current}>{current.label}</span>}
         <button
           type="button"
           className="nav-toggle"
@@ -104,14 +96,6 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#e0e0e0",
     fontSize: "0.9rem",
     fontWeight: 500,
-  },
-  badge: {
-    fontSize: "0.7rem",
-    fontWeight: 400,
-    color: "#feca57",
-    border: "1px solid #feca57",
-    borderRadius: "999px",
-    padding: "0.05rem 0.45rem",
   },
   toggle: {
     display: "none",

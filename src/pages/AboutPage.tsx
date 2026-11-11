@@ -18,6 +18,24 @@ export function AboutPage() {
           sessions so you can build up a rich map over time.
         </p>
 
+        <h2 style={styles.heading}>Scenes</h2>
+        <p style={styles.paragraph}>
+          A world map of music scenes. For each of 80 cities with at least 1,000 recorded shows, Banded
+          takes the artists based there or who play there regularly and links the ones that share band
+          members, record together, or share bills at local venues. Groups of artists more connected to
+          each other than to the rest of the city become its scenes, each placed where its artists play
+          and named after its place (the city, or a nearby town like Tacoma) and its most
+          distinctive genre.
+        </p>
+        <p style={styles.paragraph}>
+          Tap a city to see its scenes around it, colored from grey (oldest) to green (newest), and tap
+          a scene for its era, genres and best-known artists. Best known means the most Last.fm
+          listeners; for artists Last.fm doesn't have, the number of languages Wikipedia has an article
+          in, counting only musicians and bands. The filter button above the zoom controls searches by
+          scene, city, genre or artist, jumps to a city, and narrows the map to the eras you pick. Scene
+          names are generated, and an artist belongs to one scene at most.
+        </p>
+
         <h2 style={styles.heading}>Six Degrees of Music</h2>
         <p style={styles.paragraph}>
           A daily puzzle: two musicians (or two groups) to connect through any of the connections
@@ -84,9 +102,20 @@ export function AboutPage() {
           (public domain).
         </p>
         <p style={styles.paragraph}>
+          Scenes also use{" "}
+          <a href="https://www.last.fm" target="_blank" rel="noreferrer" style={styles.link}>
+            Last.fm
+          </a>{" "}
+          tags and listener counts (a 2019 snapshot, the "Music artists popularity" dataset on Kaggle),{" "}
+          <a href="https://www.wikidata.org" target="_blank" rel="noreferrer" style={styles.link}>
+            Wikidata
+          </a>{" "}
+          (CC0) for how many Wikipedias cover each artist, and MapSVG's world map (CC0).
+        </p>
+        <p style={styles.paragraph}>
           Explore, Play, and Similarity use a SQLite database loaded in your browser via WebAssembly
-          (~60MB, cached after first visit). Discover queries a backend database that fetches and caches
-          venue data on demand.
+          (~70MB, cached after first visit). Scenes loads its own smaller file of scenes (~3MB). Discover
+          queries a backend database that fetches and caches venue data on demand.
         </p>
 
         <h2 style={styles.heading}>FAQ</h2>

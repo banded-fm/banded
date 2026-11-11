@@ -8,7 +8,7 @@ import {
 } from "../scenes/sceneMap";
 
 /**
- * Scenes (in development, not in the menu): the music scenes
+ * Scenes: the music scenes
  * scripts/find_scenes.py finds in each city, on a world map. Each city is a
  * dot; tap one to open it: its scenes are scattered around it, joined to it
  * by lines, biggest nearest, with their names. A tap anywhere else
@@ -85,6 +85,17 @@ export function ScenesPage() {
   const centres = useMemo(() => new Map(cities.map((c) => [c.id, c.centre])), [cities]);
   const bubbles = useMemo(() => cityBubbles(shown, centres), [shown, centres]);
   const selected: PlacedScene | null = placed.find((s) => s.id === selectedId) ?? null;
+  // The scene panel's height: on a phone it's a sheet at the bottom, and the map buttons sit just above it.
+  const [sheetH, setSheetH] = useState(0);
+  useLayoutEffect(() => {
+    const el = boxRef.current?.querySelector<HTMLElement>(".scene-panel");
+    if (!el) { setSheetH(0); return; }
+    const measure = () => setSheetH(el.offsetHeight);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [selected?.id]);   // the panel appears once the data has loaded, and changes with the scene
 
   const vb = viewBox(view, size.w, size.h);
   const upp = vb.unitsPerPx;
@@ -360,7 +371,7 @@ export function ScenesPage() {
         </div>
       </div>}
 
-      <div ref={boxRef} className={`scenes-map${selected ? " has-panel" : ""}${open ? " city-open" : ""}`} style={{ ...styles.mapWrap, "--filters-h": `${filtersH}px` } as React.CSSProperties}>
+      <div ref={boxRef} className={`scenes-map${selected ? " has-panel" : ""}${open ? " city-open" : ""}`} style={{ ...styles.mapWrap, "--filters-h": `${filtersH}px`, "--sheet-h": `${sheetH}px` } as React.CSSProperties}>
         <svg
           ref={svgRef}
           viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
@@ -483,26 +494,13 @@ export function ScenesPage() {
 function ScenePanel({ scene, artistsBy, onClose }: {
   scene: PlacedScene; artistsBy: ScenesData["artists_by"]; onClose: () => void;
 }) {
-  const where = [scene.location.venue, scene.location.place].filter(Boolean).join(", ");
   return (
     <aside className="scene-panel" style={styles.panel} aria-label={scene.name}>
       <button type="button" onClick={onClose} aria-label="Close" style={styles.close}>✕</button>
       <h2 style={styles.panelTitle}>{scene.name}</h2>
-      <p style={styles.panelCity}>{scene.city}{scene.country ? `, ${scene.country}` : ""}</p>
-      <dl style={styles.facts}>
-        {scene.era && (<>
-          <dt style={styles.dt}>Era</dt>
-          <dd style={styles.dd}>{scene.era.label} (busiest around {scene.era.peak})</dd>
-        </>)}
-        <dt style={styles.dt}>Artists</dt>
-        <dd style={styles.dd}>{scene.size.toLocaleString()}</dd>
-        {where && (<>
-          <dt style={styles.dt}>Centred on</dt>
-          <dd style={styles.dd}>{where}</dd>
-        </>)}
-      </dl>
+      {scene.era && <p style={styles.panelSub}>{scene.era.label}</p>}
+      {/* Genres as pills, without a heading: they read as genres on their own. */}
       {scene.genres.length > 0 && <Chips label="Genres" items={scene.genres} />}
-      {scene.tags.length > 0 && <Chips label="Last.fm tags" items={scene.tags} />}
       {/* Best known first when the scenes were found with Last.fm or Wikipedia counts; else most connected. */}
       <h3 style={styles.heading}>{artistsBy === "known" ? "Best-known artists" : "Most connected artists"}</h3>
       <ul style={styles.artists}>
@@ -533,11 +531,11 @@ function FilterIcon() {
   );
 }
 
+/** A row of pills; `label` names it for screen readers only. */
 function Chips({ label, items }: { label: string; items: string[] }) {
   return (
-    <div style={styles.chips}>
-      <h3 style={styles.heading}>{label}</h3>
-      <div style={styles.chipRow}>{items.map((x) => <span key={x} style={styles.tag}>{x}</span>)}</div>
+    <div style={{ ...styles.chips, ...styles.chipRow }} role="list" aria-label={label}>
+      {items.map((x) => <span key={x} role="listitem" style={styles.tag}>{x}</span>)}
     </div>
   );
 }
@@ -571,11 +569,8 @@ const styles: Record<string, React.CSSProperties> = {
   panel: { zIndex: 10, background: "rgba(22, 22, 22, 0.97)", border: "1px solid #333", color: "#e0e0e0", overflowY: "auto", padding: "1rem 1rem 1.25rem" },
   close: { position: "absolute", top: "0.25rem", right: "0.25rem", minWidth: "44px", minHeight: "44px", background: "none", border: "none", color: "#aaa", fontSize: "1.1rem", cursor: "pointer" },
   panelTitle: { fontSize: "1.1rem", fontWeight: 700, paddingRight: "2.5rem", lineHeight: 1.3 },
-  panelCity: { color: "#888", fontSize: "0.85rem", marginTop: "0.15rem" },
-  facts: { display: "grid", gridTemplateColumns: "auto 1fr", gap: "0.25rem 0.75rem", margin: "0.75rem 0", fontSize: "0.85rem" },
-  dt: { color: "#888" },
-  dd: { color: "#e0e0e0" },
-  chips: { marginTop: "0.5rem" },
+  panelSub: { color: "#888", fontSize: "0.85rem", marginTop: "0.15rem" },
+  chips: { marginTop: "0.6rem" },
   heading: { fontSize: "0.8rem", fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: "0.04em", margin: "0.75rem 0 0.35rem" },
   chipRow: { display: "flex", flexWrap: "wrap", gap: "0.3rem" },
   tag: { fontSize: "0.8rem", background: "#242424", border: "1px solid #333", borderRadius: "999px", padding: "0.15rem 0.55rem", color: "#ccc" },

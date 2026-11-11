@@ -138,13 +138,6 @@ input {
   cursor: default;
 }
 
-/* A page not in the menu yet: its name and badge show in the bar on every screen size. */
-.nav-current-shown {
-  display: inline-flex !important;
-  align-items: center;
-  gap: 0.4rem;
-}
-
 @media (max-width: 640px) {
   /* Explore legend: 44px tap targets */
   .graph-legend .graph-legend-row {
@@ -380,6 +373,6 @@ input {
     max-height: 55%;
   }
   .scenes-map.has-panel .scenes-zoom {
-    bottom: calc(55% + 0.75rem); /* above the sheet */
+    bottom: calc(var(--sheet-h, 55%) + 0.75rem); /* just above the sheet, at its measured height */
   }
 }
