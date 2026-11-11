@@ -7,7 +7,7 @@ export interface LogEntry {
 
 /**
  * True when the URL has debug=1 or debug=true, either in the query string
- * (/?debug=1#/explore) or in the hash route's own query (#/explore?debug=true).
+ * (/?debug=1#/graph) or in the hash route's own query (#/graph?debug=true).
  */
 export function debugFlagInUrl(loc?: Pick<Location, "search" | "hash">): boolean {
   if (!loc) return false;
@@ -24,7 +24,7 @@ class DebugLog {
   private _enabled = debugFlagInUrl(typeof window === "undefined" ? undefined : window.location);
 
   constructor() {
-    // Editing the hash (#/explore?debug=1) doesn't reload the page, so pick the flag up
+    // Editing the hash (#/graph?debug=1) doesn't reload the page, so pick the flag up
     // live. It stays on while navigating the app (links drop the flag); reload without
     // the flag to turn it off.
     if (typeof window !== "undefined") {

@@ -10,9 +10,9 @@ describe("HomePage", () => {
         <HomePage />
       </MemoryRouter>
     );
-    for (const to of ["/explore", "/scenes", "/play", "/discover", "/similarity", "/about"]) {
+    for (const to of ["/graph", "/map", "/play", "/upcoming", "/proximity", "/about"]) {
       expect(html).toContain(`href="${to}"`);
     }
-    expect(HOME_LINKS).toHaveLength(6);
+    expect(HOME_LINKS.map((l) => l.label)).toEqual(["Graph", "Map", "Proximity", "Upcoming", "Play", "About"]);
   });
 });

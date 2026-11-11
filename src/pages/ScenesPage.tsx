@@ -339,7 +339,7 @@ export function ScenesPage() {
     <div className="scenes-page" style={styles.page}>
       {filtersOpen && <div ref={filtersRef} id="scenes-filters" className="scenes-controls" style={styles.controls}>
         <div style={styles.titleRow}>
-          <h1 style={styles.title}>Scenes</h1>
+          <h1 style={styles.title}>Map</h1>
           <span style={styles.count} aria-live="polite">
             {data ? `${shown.length.toLocaleString()} of ${placed.length.toLocaleString()} scenes` : error ? "" : "Loading…"}
           </span>

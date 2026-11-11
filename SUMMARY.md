@@ -6,7 +6,7 @@ A React app that visualizes music scene connections and includes a "Six Degrees 
 
 The site is **Banded** (https://banded.fm); this repo is `banded-fm/banded` (moved from `rahuljaisimha/banded` in November 2026; the old URLs redirect). Its data pipeline is `banded-fm/banded-data`.
 
-The app opens on a **Home** page (no nav bar: a one-line summary and a large button per page). Features: **Explore** (graph visualization), **Play** (Six Degrees game), **Discover** (upcoming concert recommendations), and **Similarity** (score how closely an artist fits a set of artists you like, using weighted graph relationships). Discover lists upcoming Pollstar concerts at the city's top venues, streamed in as they're found and ranked by headliner similarity. Every artist input (Explore search, Discover/Similarity lists, Play's custom game) has a search-as-you-type dropdown that labels same-name artists with their MusicBrainz disambiguation: "Fuzz (US garage rock band)"; artists MusicBrainz doesn't disambiguate get no label.
+The app opens on a **Home** page (no nav bar: a one-line summary and a large button per page). Features (nav order): **Graph** (graph visualization), **Map** (music scenes on a world map), **Proximity** (score how closely an artist fits a set of artists you like, using weighted graph relationships), **Upcoming** (upcoming concert recommendations) and **Play** (Six Degrees game). Upcoming lists upcoming Pollstar concerts at the city's top venues, streamed in as they're found and ranked by headliner similarity. Every artist input (Explore search, Discover/Similarity lists, Play's custom game) has a search-as-you-type dropdown that labels same-name artists with their MusicBrainz disambiguation: "Fuzz (US garage rock band)"; artists MusicBrainz doesn't disambiguate get no label.
 
 ## Tech stack
 
@@ -239,7 +239,7 @@ src/
 │   └── SceneGraph.ts     — In-memory graph with dedup/merge, persistence, expanded tracking.
 ├── pages/
 │   ├── HomePage.tsx      — Default page (#/), no nav bar: one-line summary + a large button per page (HOME_LINKS). Going to or from it, the title glides into the nav brand while the bar slides down, both in 0.4 s on one linear() spring curve (a quick ~11% wind-up the other way, a sweep, ~10% overshoot), no page fade (view transitions: `viewTransition` links, `view-transition-name` in index.css; off with reduced motion).
-│   ├── ExplorePage.tsx   — (#/explore) Graph exploration via SQLite. Only person/group nodes. Albums filtered out.
+│   ├── ExplorePage.tsx   — Graph (#/graph): graph exploration via SQLite. Only person/group nodes. Albums filtered out.
 │   ├── PlayPage.tsx      — Six Degrees game: BFS pathfinding, valid moves list with relationship labels,
 │   │                       undo, sorted by rel_type priority, par scoring, reveal shortest path.
 │   │                       Supports daily, random (from the list), custom (any two connected nodes), and shared (MBID URL) games.
@@ -265,13 +265,13 @@ src/
 │   │                       Async prepareArtists() prefetch + sync build() facade. Used by Similarity + Concerts.
 │   ├── searchResolution.ts — Pure logic: resolve an Explore search by MBID (just-clicked node) or by name.
 │   └── AboutPage.tsx     — Project info, data source credits, GitHub link.
-│   └── ScenesPage.tsx     — Scenes (#/scenes): the scenes from scripts/find_scenes.py on a
+│   └── ScenesPage.tsx     — Map (#/map): the scenes from scripts/find_scenes.py on a
 │                            world map (scenes/world-low.svg, -high.svg zoomed in), a dot per city; an open city amid its scattered scenes,
 │                            named and joined to it by lines; era colours grey to green; pan/zoom/pinch; filters (text, city, decades) behind a filter button; ?scene=<id>.
 ├── components/
 │   ├── ArtistAutocomplete.tsx — Artist input + dropdown (keyboard, ARIA combobox, 44px rows on phones).
 │   │                       Used by SearchBar, Discover, Similarity and Play's custom game.
-│   ├── Layout.tsx        — Shared nav bar with Explore/Scenes/Play/Discover/Similarity/About links; the brand links home; hidden on the home page. Pins SiteFooter under every page but Home (which puts it after its content) and About (which has the full credits).
+│   ├── Layout.tsx        — Shared nav bar: Graph (#/graph), Map (#/map), Proximity (#/proximity), Upcoming (#/upcoming), Play, About; the brand links home; hidden on the home page. Pins SiteFooter under every page but Home (which puts it after its content) and About (which has the full credits).
 │   ├── SiteFooter.tsx    — One-line footer: the data sources (MusicBrainz, setlist.fm, Pollstar) and that connections and shows may be missing.
 │   │                       Inline tabs on desktop; hamburger menu below 640px.
 │   ├── SearchBar.tsx     — Search input, expand, reset. Responsive layout.
@@ -293,7 +293,7 @@ src/
 │   └── cache.ts          — localStorage request cache with TTL (used by pollstar.ts, 24h).
 ├── debug/
 │   └── DebugLog.ts       — Singleton log store. Enabled by debug=1/true in the query string or the
-│                           hash route's query (#/explore?debug=1); stays on until a reload without it.
+│                           hash route's query (#/graph?debug=1); stays on until a reload without it.
 ├── test/
 │   ├── setup.ts          — Vitest setup (localStorage shim for Node env).
 │   ├── musicbrainz.integration.test.ts — Regression tests for recurring MB bugs (stubbed fetch).
@@ -302,7 +302,7 @@ src/
 │   ├── searchResolution.test.ts  — MBID-vs-name search resolution.
 │   ├── artistSuggest.test.ts     — Dropdown suggestion merging and labels.
 │   └── fixtures/         — Captured MusicBrainz API responses (search-fuzz, artist-arctic-monkeys, etc.).
-├── App.tsx               — Router (createHashRouter, 6 routes: Home at /, Explore at /explore, Play, Discover, Similarity, About; unknown paths go home).
+├── App.tsx               — Router (createHashRouter, 7 routes: Home at /, Graph at /graph, Map at /map, Proximity at /proximity, Upcoming at /upcoming, Play, About; unknown paths go home).
 ├── main.tsx              — Entry point.
 ├── vite-env.d.ts         — Vite type declarations.
 ├── sql.js.d.ts           — sql.js type declarations.

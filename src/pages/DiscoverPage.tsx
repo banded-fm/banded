@@ -168,7 +168,7 @@ export function DiscoverPage() {
     <div style={styles.page}>
       <div className="page-container" style={styles.container}>
         <div style={styles.header}>
-          <h1 className="page-title" style={styles.title}>Discover Concerts</h1>
+          <h1 className="page-title" style={styles.title}>Upcoming Concerts</h1>
           <p style={styles.subtitle}>
             Find upcoming concerts in a city, ranked by how well the artist fits your taste.
           </p>
