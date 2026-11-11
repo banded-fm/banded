@@ -42,9 +42,11 @@ describe("site footer", () => {
 });
 
 describe("nav bar", () => {
-  it("names a page that isn't in the menu yet, with its Preview badge, on every screen size", () => {
+  it("lists Scenes in the menu, after Explore", () => {
     const html = render("/scenes");
-    expect(html).toMatch(/class="nav-current nav-current-shown"[^>]*>Scenes<span class="nav-badge"[^>]*>Preview<\/span>/);
+    expect(html.indexOf('href="/scenes"')).toBeGreaterThan(html.indexOf('href="/explore"'));
+    expect(html.indexOf('href="/scenes"')).toBeLessThan(html.indexOf('href="/play"'));
+    expect(html).toMatch(/class="nav-current"[^>]*>Scenes<\/span>/);
   });
 
   it("names a menu page only for the phone menu, without a badge", () => {
