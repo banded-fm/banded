@@ -12,9 +12,9 @@ function render(path: string) {
       <Routes>
         <Route element={<Layout />}>
           <Route path="/" element={<HomePage />} />
-          <Route path="/explore" element={<p>explore</p>} />
+          <Route path="/graph" element={<p>explore</p>} />
           <Route path="/about" element={<p>about</p>} />
-          <Route path="/scenes" element={<p>scenes</p>} />
+          <Route path="/map" element={<p>scenes</p>} />
         </Route>
       </Routes>
     </MemoryRouter>
@@ -25,7 +25,7 @@ const footers = (html: string) => html.match(/<footer/g)?.length ?? 0;
 
 describe("site footer", () => {
   it("is under the pages that have the nav bar", () => {
-    const html = render("/explore");
+    const html = render("/graph");
     expect(footers(html)).toBe(1);
     expect(html).toContain(FOOTER);
   });
@@ -42,16 +42,18 @@ describe("site footer", () => {
 });
 
 describe("nav bar", () => {
-  it("lists Scenes in the menu, after Explore", () => {
-    const html = render("/scenes");
-    expect(html.indexOf('href="/scenes"')).toBeGreaterThan(html.indexOf('href="/explore"'));
-    expect(html.indexOf('href="/scenes"')).toBeLessThan(html.indexOf('href="/play"'));
-    expect(html).toMatch(/class="nav-current"[^>]*>Scenes<\/span>/);
+  it("lists the pages by their names, in order: Graph, Map, Proximity, Upcoming, Play, About", () => {
+    const html = render("/map");
+    const at = (to: string) => html.indexOf(`href="${to}"`);
+    const order = ["/graph", "/map", "/proximity", "/upcoming", "/play", "/about"];
+    for (let i = 1; i < order.length; i++) expect(at(order[i]!)).toBeGreaterThan(at(order[i - 1]!));
+    for (const name of ["Graph", "Map", "Proximity", "Upcoming", "Play", "About"]) expect(html).toContain(`>${name}</a>`);
+    expect(html).toMatch(/class="nav-current"[^>]*>Map<\/span>/);
   });
 
   it("names a menu page only for the phone menu, without a badge", () => {
-    const html = render("/explore");
-    expect(html).toMatch(/class="nav-current"[^>]*>Explore<\/span>/);
+    const html = render("/graph");
+    expect(html).toMatch(/class="nav-current"[^>]*>Graph<\/span>/);
     expect(html).not.toContain("nav-badge");
   });
 });

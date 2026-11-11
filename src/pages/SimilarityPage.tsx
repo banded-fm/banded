@@ -118,7 +118,7 @@ export function SimilarityPage() {
     <div style={styles.page}>
       <div className="page-container" style={styles.container}>
         <div style={styles.header}>
-          <h1 className="page-title" style={styles.title}>Similarity Score</h1>
+          <h1 className="page-title" style={styles.title}>Proximity Score</h1>
           <p style={styles.subtitle}>
             See how closely an artist fits a group of artists you like, based on
             shared members and connections in the music graph.
@@ -189,7 +189,7 @@ export function SimilarityPage() {
             disabled={loading || !target.trim() || artists.length === 0}
             style={styles.searchBtn}
           >
-            {loading ? "Scoring…" : "Compute Similarity"}
+            {loading ? "Scoring…" : "Compute Proximity"}
           </button>
         </div>
 

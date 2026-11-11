@@ -2,12 +2,13 @@ import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { SiteFooter } from "./SiteFooter";
 
+// Names and order of the pages.
 const NAV_ITEMS = [
-  { to: "/explore", label: "Explore" },
-  { to: "/scenes", label: "Scenes" },
+  { to: "/graph", label: "Graph" },
+  { to: "/map", label: "Map" },
+  { to: "/proximity", label: "Proximity" },
+  { to: "/upcoming", label: "Upcoming" },
   { to: "/play", label: "Play" },
-  { to: "/discover", label: "Discover" },
-  { to: "/similarity", label: "Similarity" },
   { to: "/about", label: "About" },
 ];
 

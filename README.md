@@ -31,27 +31,31 @@ or:
 
 # Current Implementation
 
-The app opens on a home page with a one-line summary and a large button for each page (the nav bar is on every other page). It has four features, powered by a precomputed SQLite database (built from MusicBrainz data dumps) queried directly in the browser via WebAssembly. It works on desktop and phones.
+The app opens on a home page with a one-line summary and a large button for each page (the nav bar is on every other page). It has five features, powered by a precomputed SQLite database (built from MusicBrainz data dumps) queried directly in the browser via WebAssembly. It works on desktop and phones.
 
-## Explore
+## Graph
 
 Search for any artist or group and visualize their network — group members, side projects, and supporting musicians rendered as an interactive force-directed graph. Click a node to see what MusicBrainz says about it (its disambiguation, its genres, and a link to its MusicBrainz page) and to explore further. The legend explains the colours and arrows, and its checkboxes add more kinds of connection: musicians who played or sang on an artist's records, producers, and acts that opened for them.
 
 As you type, a dropdown suggests matching artists from the app's database. Each one is labelled the way MusicBrainz does it, with its disambiguation in parentheses, e.g. **Fuzz** (US garage rock band), so you can pick the right one when several artists share a name. Artists MusicBrainz doesn't disambiguate (like Alex Turner) have no label. Artists the database doesn't have are looked up on MusicBrainz; picking one of those (or an Explore search that finds nothing) is logged, and [banded-data](https://github.com/banded-fm/banded-data) crawls those artists' concerts so they join the graph at its next rebuild. The same dropdown is on Discover, Similarity and the custom game in Play, and everywhere the artist you pick is the one used, even when others share its name.
 
-## Six Degrees of Music (Game)
+## Map
 
-A daily puzzle: two musicians (or two groups) to connect through any connection Banded knows (band memberships, supporting roles, playing or singing on each other's records, producing them, opening for each other). Par is the closest connection through well-known artists (10+ Wikipedia editions); a shorter route beats it. The puzzles are a committed list, `src/game/puzzles.json`, one per day from `DAILY_START`; `src/game/PUZZLES.md` explains how they were chosen. There are also random puzzles from the list, and custom games between any two artists (par = shortest path). The page opens straight away with today's puzzle and its moves: until the music graph has downloaded, the moves come from the server.
+A world map of music scenes (`#/map`). For each of 80 cities with at least 1,000 shows, `scripts/find_scenes.py` groups the local artists who share members, records or bills into scenes, each named after its place and most distinctive genre, with an era, its genres and its best-known artists (by Last.fm listeners, else Wikipedia languages). Tap a city to see its scenes around it; the filter button searches by scene, city, genre or artist and narrows to eras.
 
-## Discover
-
-Find upcoming concerts in any city, ranked by how well each headliner fits the artists you like. Enter a city (a dropdown suggests Pollstar's cities as you type, e.g. "Berlin, Germany" or "Berlin, MD"), the dates you're interested in (today through the next 7 days unless you pick others, up to 4 years ahead) and a list of artists: the app finds the city on Pollstar and loads its shows in those dates 100 at a time, soonest first (up to the first 1,000; Pollstar is rate limited). Concerts appear as soon as each page arrives and move into place as their headliners are scored. While it runs, the button turns into a progress bar and **Stop** ends the search with what it has so far. Each concert lists its support acts ("Support from: ..."), and tapping one opens a panel showing how its headliner connects to each artist you like, like the Similarity page's breakdown.
-
-## Similarity
+## Proximity
 
 Score how closely an artist fits a group of artists you like, from 0 to 100, based on shared group members, collaborations, who opened for whom at concerts, and other connections in the music graph. Each kind of relationship has a weight (being in the same group counts most), and two artists are as close as the strongest chain of relationships between them: its weights multiplied together, a little less for every step beyond two (so two members of the same group are as close as it gets). Playing on, producing or touring with an artist who has very many such collaborators counts for less, so a big pop star's session players don't make everyone similar; group memberships and who opened for whom always count in full. Someone who played on many of an artist's songs is closer than a one-song guest; producing someone is a weaker tie that grows slowly with the number of songs and never gets as close as the others; opening for a band once already counts as close, and twice or more a bit closer. Artists missing from the built-in graph are looked up from the backend database and MusicBrainz.
 
 Tap an artist in the breakdown to see how it connects to the one you're comparing: the strongest chain of relationships between them, each link's weight, and how they multiply into the score.
+
+## Upcoming
+
+Find upcoming concerts in any city, ranked by how well each headliner fits the artists you like. Enter a city (a dropdown suggests Pollstar's cities as you type, e.g. "Berlin, Germany" or "Berlin, MD"), the dates you're interested in (today through the next 7 days unless you pick others, up to 4 years ahead) and a list of artists: the app finds the city on Pollstar and loads its shows in those dates 100 at a time, soonest first (up to the first 1,000; Pollstar is rate limited). Concerts appear as soon as each page arrives and move into place as their headliners are scored. While it runs, the button turns into a progress bar and **Stop** ends the search with what it has so far. Each concert lists its support acts ("Support from: ..."), and tapping one opens a panel showing how its headliner connects to each artist you like, like the Similarity page's breakdown.
+
+## Six Degrees of Music (Game)
+
+A daily puzzle: two musicians (or two groups) to connect through any connection Banded knows (band memberships, supporting roles, playing or singing on each other's records, producing them, opening for each other). Par is the closest connection through well-known artists (10+ Wikipedia editions); a shorter route beats it. The puzzles are a committed list, `src/game/puzzles.json`, one per day from `DAILY_START`; `src/game/PUZZLES.md` explains how they were chosen. There are also random puzzles from the list, and custom games between any two artists (par = shortest path). The page opens straight away with today's puzzle and its moves: until the music graph has downloaded, the moves come from the server.
 
 ## Running
 
@@ -70,7 +74,7 @@ python3 scripts/add_concertdb_edges.py   # "opened for" links from banded-data
 
 `process_mb_dump.py` starts from ~145 curated artists and, when a local banded-data ledger is present, from every artist with a concert in it, and keeps the download under 74 MB. `add_concertdb_edges.py` reads a local [banded-data](https://github.com/banded-fm/banded-data) ledger (`~/banded-data/data/ledger.sqlite`, or `--ledger` / `$CONCERTDB_LEDGER`) and adds an "opened for" link for every opener/headliner pair it has confirmed. It can be re-run on its own to refresh those links without rebuilding the graph.
 
-To see the debug log console, open the app with `?debug=1` or `?debug=true` in the URL, e.g. `http://localhost:5173/?debug=1` or `…/#/explore?debug=1`. It stays on while you navigate; reload without the flag to turn it off.
+To see the debug log console, open the app with `?debug=1` or `?debug=true` in the URL, e.g. `http://localhost:5173/?debug=1` or `…/#/graph?debug=1`. It stays on while you navigate; reload without the flag to turn it off.
 
 ## Deploying
 
