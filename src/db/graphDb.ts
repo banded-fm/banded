@@ -1,4 +1,5 @@
 import initSqlJs, { type SqlJsConfig } from "sql.js";
+import { bfsDistances } from "../game/distance";
 import { NotTheFile, downloadWithResume } from "./download";
 
 // Use the proper type from our declaration
@@ -227,6 +228,12 @@ export function getNeighbors(
     stmt.reset();
   }
   return results;
+}
+
+/** Steps from this artist to every artist within `maxDepth` (null until the graph has loaded). */
+export function distancesFrom(id: string, maxDepth: number): Map<string, number> | null {
+  if (!db) return null;
+  return bfsDistances(id, (n) => getNeighborIds(n), maxDepth);
 }
 
 /**
