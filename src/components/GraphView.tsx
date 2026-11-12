@@ -28,6 +28,10 @@ const ARROW_WIDTH = 2.4;
 /** Screen pixels kept clear around the fitted graph, and the closest a fit zooms in. */
 const FIT_PADDING = 16;
 const MAX_FIT_ZOOM = 4;
+/** The longest artists already on the graph stay put while it changes around them (normally until the layout stops). */
+const HOLD_MS = 15000;
+/** How hard a held artist is pulled back to its place each tick (0..1). */
+const HOLD_STRENGTH = 0.15;
 const FALLBACK: BubbleLabel = { lines: [], width: 12, height: 8, corner: 4 };
 
 // One canvas to measure names with (the graph's own isn't there before the first draw)
@@ -52,9 +56,108 @@ function roundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, b: Bub
   ctx.closePath();
 }
 
-export function GraphView({ data, onNodeClick, onBackgroundClick }: Props) {
+export function GraphView({ data: incoming, onNodeClick, onBackgroundClick }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const graphRef = useRef<ForceGraphMethods | undefined>(undefined);
+
+  // Adding or removing artists shouldn't shake up the rest of the graph. The page hands over fresh node objects
+  // on every change, and the layout keeps each node's position on its object: reuse the objects the layout
+  // already has (updating their name, colour and expanded state), and start each new node next to a neighbour
+  // that's already placed, so new connections grow out of the artist rather than flying in from anywhere.
+  const placed = useRef(new Map<string | number, GraphNode>());
+  const reachOf = (n: GraphNode) => { const b = layoutBubble(n.name ?? "", n.type, measure); return (b.width + b.height) / 4; };
+  // Nodes held in place while the graph changes around them: the layout restarts at full strength on every change,
+  // and without this newcomers (or gaps left by removals) push everything around. Held, not pinned: a strong pull
+  // back to where each was (the "hold" force), so a newcomer can still nudge its neighbours aside instead of
+  // landing on top of them. Released when the layout stops (so nothing is left to drift), or after HOLD_MS.
+  // They're held in shape, not to fixed spots: the layout's centring force keeps moving the whole graph so its
+  // middle stays put, and holding fixed spots against that made only the newcomers slide away from where they were
+  // added. Instead the held artists move along with it (`shift`, how far their middle has moved) and the camera
+  // follows them, so on screen they stay where they were.
+  const held = useRef<{
+    nodes: GraphNode[]; at: Map<GraphNode, [number, number]>; timer?: ReturnType<typeof setTimeout>;
+    shift: [number, number]; followed: [number, number]; count: number;
+  }>({ nodes: [], at: new Map(), shift: [0, 0], followed: [0, 0], count: 0 });
+  const release = () => {
+    const hold = held.current;
+    clearTimeout(hold.timer);
+    hold.nodes = [];
+    hold.at.clear();
+    hold.shift = [0, 0]; hold.followed = [0, 0]; hold.count = 0;
+  };
+  const data = useMemo(() => {
+    const before = placed.current;
+    release();
+    const hold = held.current;
+    const next = new Map<string | number, GraphNode>();
+    const nodes = (incoming.nodes as GraphNode[]).map((n) => {
+      const old = n.id !== undefined ? before.get(n.id) : undefined;
+      const node = old ? Object.assign(old, { name: n.name, type: n.type, color: n.color, expanded: n.expanded, val: n.val }) : { ...n };
+      if (node.id !== undefined) next.set(node.id, node);
+      return node;
+    });
+    const endId = (e: unknown) => (typeof e === "object" && e !== null ? (e as GraphNode).id : e) as string | number;
+    const neighbours = new Map<string | number, (string | number)[]>();
+    for (const l of incoming.links) {
+      const a = endId(l.source), b = endId(l.target);
+      neighbours.set(a, [...(neighbours.get(a) ?? []), b]);
+      neighbours.set(b, [...(neighbours.get(b) ?? []), a]);
+    }
+    // Start each new node where its links will want it, so it doesn't travel across the graph:
+    // - next to two or more placed neighbours: between them (their average), nudged apart from the others there;
+    // - next to one: on its outer side (away from the middle of the graph, where the other artists are), fanned
+    //   out with that neighbour's other newcomers.
+    // A few passes, so a new node next to another new one is placed once that one is.
+    const placedNow = nodes.filter((n) => n.x !== undefined && n.y !== undefined);
+    const cx = placedNow.reduce((t, n) => t + n.x!, 0) / Math.max(1, placedNow.length);
+    const cy = placedNow.reduce((t, n) => t + n.y!, 0) / Math.max(1, placedNow.length);
+    const single = new Map<GraphNode, GraphNode[]>();   // anchor -> new nodes with only it placed, in order
+    const between: [GraphNode, GraphNode[]][] = [];
+    for (let pass = 0; pass < 3; pass++) {
+      for (const n of nodes) {
+        if (n.x !== undefined || n.id === undefined) continue;
+        const placedAnchors = [...new Set((neighbours.get(n.id) ?? []).map((id) => next.get(id)))]
+          .filter((m): m is GraphNode => m !== undefined && m.x !== undefined && m.y !== undefined);
+        if (placedAnchors.length === 0) continue;
+        if (placedAnchors.length === 1) single.set(placedAnchors[0]!, [...(single.get(placedAnchors[0]!) ?? []), n]);
+        else between.push([n, placedAnchors]);
+        n.x = placedAnchors[0]!.x; n.y = placedAnchors[0]!.y;   // for now, so the next pass can anchor to it
+      }
+    }
+    for (const [anchor, news] of single) {
+      const out = Math.hypot(anchor.x! - cx, anchor.y! - cy) > 1
+        ? Math.atan2(anchor.y! - cy, anchor.x! - cx) : Math.random() * 2 * Math.PI;
+      const fan = Math.min(Math.PI * 0.8, 0.45 * news.length);   // wider for more newcomers, up to ±72°
+      news.forEach((n, i) => {
+        const angle = out + (news.length === 1 ? 0 : -fan + (2 * fan * i) / (news.length - 1));
+        const r = reachOf(anchor) + reachOf(n) + LINK_GAP + 10 + (i % 2) * 18;
+        n.x = anchor.x! + r * Math.cos(angle);
+        n.y = anchor.y! + r * Math.sin(angle);
+      });
+    }
+    between.forEach(([n, anchors], i) => {
+      const mx = anchors.reduce((t, a) => t + a.x!, 0) / anchors.length;
+      const my = anchors.reduce((t, a) => t + a.y!, 0) / anchors.length;
+      const angle = (i * 2.4) % (2 * Math.PI);   // spread several around the same spot (golden-angle steps)
+      n.x = mx + 12 * Math.cos(angle);
+      n.y = my + 12 * Math.sin(angle);
+    });
+    placed.current = next;
+    // Hold the artists that were already placed when artists were added or removed (a change in names or colours
+    // alone doesn't move anything).
+    const changed = nodes.some((n) => n.id !== undefined && !before.has(n.id)) || [...before.keys()].some((id) => !next.has(id));
+    if (changed) {
+      for (const n of nodes) {
+        if (n.id !== undefined && before.has(n.id) && n.x !== undefined && n.y !== undefined && n.fx === undefined) {
+          hold.at.set(n, [n.x, n.y]);
+          hold.nodes.push(n);
+        }
+      }
+      hold.count = hold.at.size;   // so the camera follows from the very first tick
+      hold.timer = setTimeout(release, HOLD_MS);
+    }
+    return { nodes, links: incoming.links.map((l) => ({ ...l, source: endId(l.source), target: endId(l.target) })) } as ForceGraphData;
+  }, [incoming]);
 
   // Each node's lines and box, worked out once per graph
   const bubbles = useMemo(() => {
@@ -80,9 +183,38 @@ export function GraphView({ data, onNodeClick, onBackgroundClick }: Props) {
     if (!g || forcesSet.current) return;
     forcesSet.current = true;
     g.d3Force("collide", boxCollide<GraphNode>(bubble, COLLIDE_GAP) as Parameters<ForceGraphMethods["d3Force"]>[1]);
+    // Held nodes are pulled back towards where they were, every tick (not scaled down as the layout cools).
+    const hold = () => {
+      const [sx, sy] = held.current.shift;
+      for (const [n, [x, y]] of held.current.at) {
+        n.vx = (n.vx ?? 0) + (x + sx - (n.x ?? x)) * HOLD_STRENGTH;
+        n.vy = (n.vy ?? 0) + (y + sy - (n.y ?? y)) * HOLD_STRENGTH;
+      }
+    };
+    g.d3Force("hold", hold as unknown as Parameters<ForceGraphMethods["d3Force"]>[1]);
     const link = g.d3Force("link") as { distance?: (d: (l: { source: GraphNode; target: GraphNode }) => number) => void } | undefined;
     link?.distance?.((l) => reach(l.source) + reach(l.target) + LINK_GAP);
     g.d3ReheatSimulation();
+  };
+
+  // Each tick: how far the held artists' middle has moved from where it was, and the camera moves by as much, so
+  // they stay put on screen. When the held set changes (an artist dragged away) only the new baseline is taken.
+  const follow = () => {
+    const g = graphRef.current, hold = held.current;
+    if (!g || hold.at.size === 0) return;
+    let dx = 0, dy = 0;
+    for (const [n, [x, y]] of hold.at) { dx += (n.x ?? x) - x; dy += (n.y ?? y) - y; }
+    const shift: [number, number] = [dx / hold.at.size, dy / hold.at.size];
+    hold.shift = shift;
+    if (hold.count === hold.at.size) {
+      const mx = shift[0] - hold.followed[0], my = shift[1] - hold.followed[1];
+      if (Math.abs(mx) > 0.01 || Math.abs(my) > 0.01) {
+        const c = g.centerAt() as unknown as { x: number; y: number } | undefined;
+        if (c) g.centerAt(c.x + mx, c.y + my);
+      }
+    }
+    hold.followed = shift;
+    hold.count = hold.at.size;
   };
 
   // Fit every bubble (not just node centres, as zoomToFit does) into the view
@@ -103,14 +235,17 @@ export function GraphView({ data, onNodeClick, onBackgroundClick }: Props) {
     g.zoom(Math.max(k, 0.05), ms);
   };
 
-  // Fit the graph to the view when data changes: once soon, and again when the
-  // layout has settled (bubbles spread out for a few seconds)
+  // Fit the graph to the view when it first appears (the first search, or the first after Reset): once soon,
+  // and again when the layout has settled. Later additions and removals leave the camera where it is.
   const fitPending = useRef(false);
+  const wasEmpty = useRef(true);
   useEffect(() => {
-    if (data.nodes.length > 0) {
+    const empty = data.nodes.length === 0;
+    if (!empty && wasEmpty.current) {
       fitPending.current = true;
       setTimeout(() => fit(400), 500);
     }
+    wasEmpty.current = empty;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
 
@@ -122,10 +257,12 @@ export function GraphView({ data, onNodeClick, onBackgroundClick }: Props) {
         nodeLabel={isTouch ? "" : "name"}
         nodeColor="color"
         onNodeClick={onNodeClick}
+        onNodeDrag={(node) => { held.current.at.delete(node as GraphNode); }}
         onBackgroundClick={onBackgroundClick}
         onLinkClick={onBackgroundClick}
-        onEngineTick={setForces}
+        onEngineTick={() => { setForces(); follow(); }}
         onEngineStop={() => {
+          release();
           if (!fitPending.current) return;
           fitPending.current = false;
           fit(400);
