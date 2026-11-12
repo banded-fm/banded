@@ -47,7 +47,24 @@ export function SearchBar({ onSearch, loading, prefill, onPrefillConsumed, onRes
           wrapperStyle={styles.inputWrapper}
           ariaLabel="Search artists"
         />
-        {/* Joined to the box: adds the artist's connections, like the panel's "+ Add connections". */}
+        {/* Clears the text, inside the box (its background and border), whenever there is text: on desktop and
+            phones, focused or not (a clicked node fills the box without focusing it). */}
+        {query && (
+          <button
+            type="button"
+            className="search-clear"
+            style={styles.clear}
+            aria-label="Clear search"
+            title="Clear search"
+            onClick={(e) => {
+              setQuery("");
+              e.currentTarget.parentElement?.querySelector("input")?.focus();
+            }}
+          >
+            ×
+          </button>
+        )}
+        {/* Joined to the box: adds the artist's connections, like the panel's +. */}
         <button
           type="submit"
           className="search-add"
@@ -97,6 +114,19 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "16px",
     height: "100%",
     boxSizing: "border-box",
+  },
+  // Inside the box: its background and its top and bottom border, no border of its own between text and ×.
+  clear: {
+    minWidth: "36px",
+    padding: "0 0.5rem",
+    border: "1px solid #444",
+    borderLeft: "none",
+    borderRight: "none",
+    background: "#2a2a2a",
+    color: "#999",
+    fontSize: "1.3rem",
+    lineHeight: 1,
+    cursor: "pointer",
   },
   button: {
     minWidth: "44px",

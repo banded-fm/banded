@@ -197,6 +197,9 @@ input {
   .search-group input {
     min-height: 44px;
   }
+  .search-clear {
+    min-width: 44px !important;
+  }
 
   /* Node details: bottom sheet over the graph */
   .info-panel {
@@ -322,7 +325,8 @@ input {
 .search-group-highlight {
   animation: group-highlight-fade 0.8s ease-out forwards;
 }
-.search-group-highlight input {
+.search-group-highlight input,
+.search-group-highlight .search-clear {
   animation: highlight-fill 0.8s ease-out forwards;
 }
 @keyframes group-highlight-fade {
