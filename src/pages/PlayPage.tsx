@@ -7,6 +7,7 @@ import { dailyPuzzle, findPuzzle, localDate, randomPuzzle, type Puzzle } from ".
 import { DebugConsole } from "../components/DebugConsole";
 import { ArtistAutocomplete } from "../components/ArtistAutocomplete";
 import { debugLog } from "../debug/DebugLog";
+import { parVerdict } from "../game/result";
 
 /**
  * "loading": the game isn't known yet (a random game needs the graph to find a
@@ -316,6 +317,9 @@ export function PlayPage() {
   const current = walk && walk.key === key && !walk.failed ? walk : null;
   const movesFailed = !!walk && walk.key === key && !!walk.failed;
   const visitedIds = new Set(current?.ids ?? []);
+  // Won: the last step reached the end artist (by ID, so a namesake or a typed name that isn't a move doesn't count).
+  const won = !!current && state.guesses.length > 0 && current.ids.length === state.guesses.length + 1
+    && current.ids[current.ids.length - 1] === state.endId;
 
   // Valid next moves: neighbors of the current artist, excluding ones already visited
   const validMoves = (() => {
@@ -567,7 +571,28 @@ export function PlayPage() {
         {state.status !== "error" && (
           <>
             {state.status === "playing" && (<>
-            {!state.revealed && (
+            {won && (
+              <div style={styles.wonSection} role="status">
+                <p style={styles.wonTitle}>You connected them in {state.guesses.length} {state.guesses.length === 1 ? "step" : "steps"}!</p>
+                <p style={styles.wonDetail}>{state.par != null ? `Par ${state.par}: ${parVerdict(state.guesses.length, state.par)}` : ""}</p>
+                <div style={styles.guessList}>
+                  <span style={styles.guessChip}>{state.startArtist!.name}</span>
+                  {state.guesses.map((g, i) => (
+                    <span key={i} style={styles.guessStep}>
+                      <span style={styles.chainArrow}>→</span>
+                      <span style={i === state.guesses.length - 1 ? styles.guessChipCurrent : styles.guessChip}>{g}</span>
+                    </span>
+                  ))}
+                </div>
+                {!state.revealed && (
+                  <button onClick={handleReveal} style={styles.revealBtn}>
+                    {state.listed ? "Show Par Path" : "Show Shortest Path"}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {!state.revealed && !won && (
               <div style={styles.inputSection}>
                 <div style={styles.guessList}>
                   <span style={styles.guessChip}>{state.startArtist!.name}</span>
@@ -652,7 +677,7 @@ export function PlayPage() {
                     );
                   })}
                 </div>
-                {state.guesses.length > 0 && (
+                {state.guesses.length > 0 && !won && (
                   <div style={styles.guessList}>
                     <p style={styles.guessLabel}>Your path ({state.guesses.length + 1} hops):</p>
                     <span style={styles.guessChip}>{state.startArtist!.name}</span>
@@ -768,6 +793,9 @@ const styles: Record<string, React.CSSProperties> = {
   stepCount: { color: "#888", fontSize: "0.8rem" },
   undoBtn: { padding: "0.3rem 0.75rem", borderRadius: "4px", border: "1px solid #feca57", background: "transparent", color: "#feca57", cursor: "pointer", fontSize: "0.8rem", fontWeight: 600 },
   revealSection: { display: "flex", flexDirection: "column", alignItems: "center", gap: "0.75rem" },
+  wonSection: { display: "flex", flexDirection: "column", alignItems: "center", gap: "0.6rem", width: "100%", maxWidth: "600px", textAlign: "center" },
+  wonTitle: { color: "#fff", fontWeight: 700, fontSize: "1.15rem" },
+  wonDetail: { color: "#888", fontSize: "0.9rem" },
   revealLabel: { color: "#55efc4", fontWeight: 600, fontSize: "0.9rem" },
   chainDisplay: { display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "center", gap: "0.25rem" },
   chainItem: { display: "flex", alignItems: "center", gap: "0.25rem" },
