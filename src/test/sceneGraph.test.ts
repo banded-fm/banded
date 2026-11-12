@@ -36,6 +36,46 @@ describe("SceneGraph visible relationship types", () => {
   });
 });
 
+describe("SceneGraph unexpand", () => {
+  // Ty expanded: Fuzz (member), White Fence (produced, hidden by default), Osees, Charles (played on records).
+  // Charles expanded too: Fuzz (member) and Chad, who only Charles brings in.
+  function two() {
+    const g = graph();
+    g.addNode({ id: "cm", type: "musician", name: "Charles Moothart" });
+    g.addNode({ id: "cu", type: "musician", name: "Chad Ubovich" });
+    g.addEdge({ id: "ty-collaborated_with-cm", source: "cm", target: "ty", type: "collaborated_with" });
+    g.markExpanded("cm");
+    g.addEdge({ id: "cm-member_of-fuzz", source: "cm", target: "fuzz", type: "member_of" });
+    g.addEdge({ id: "cu-collaborated_with-cm", source: "cu", target: "cm", type: "collaborated_with" });
+    return g;
+  }
+
+  it("puts the graph back as it was before the expansion", () => {
+    const g = two();
+    expect(g.collapse("cm")).toEqual(["cu"]);           // only Charles brought Chad in
+    expect(g.isExpanded("cm")).toBe(false);
+    expect(g.hasNode("cm")).toBe(true);                  // still Ty's neighbour (a hidden relationship)...
+    expect(g.toForceGraphData(new Set<EdgeType>(DEFAULT_EXPLORE_RELS)).nodes.map((n) => n.id).sort())
+      .toEqual(["fuzz", "ty"]);                          // ...so with the default legend he isn't drawn
+    const links = g.toForceGraphData().links.map((l) => `${l.source}>${l.target}`).sort();
+    expect(links).toEqual(["cm>ty", "ty>fuzz", "ty>osees", "ty>wf"]);   // Charles's own edges are gone
+  });
+
+  it("removes the artist too when no expanded artist is left next to it", () => {
+    const g = two();
+    g.collapse("cm");
+    expect(g.collapse("ty").sort()).toEqual(["cm", "fuzz", "osees", "ty", "wf"]);
+    expect(g.nodeCount).toBe(0);
+    expect(g.edgeCount).toBe(0);
+  });
+
+  it("keeps neighbours another expanded artist still reaches", () => {
+    const g = two();
+    expect(g.collapse("ty").sort()).toEqual(["osees", "wf"]);   // Fuzz and Ty stay: Charles reaches them
+    expect(g.hasNode("ty") && g.hasNode("fuzz") && g.hasNode("cm")).toBe(true);
+  });
+});
+
 describe("legend", () => {
   it("defaults to the band relationships", () => {
     expect(DEFAULT_EXPLORE_RELS).toEqual(["member_of", "former_member_of", "support_musician"]);

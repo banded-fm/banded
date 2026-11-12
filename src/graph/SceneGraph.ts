@@ -66,6 +66,32 @@ export class SceneGraph {
   }
 
   /**
+   * Undo an expansion, leaving the graph as if the node had never been expanded: the node is no longer expanded,
+   * its edges to artists that aren't expanded go, and then it and each of its neighbours stays only if it's
+   * expanded or still connected to an expanded artist (by any relationship, drawn or not). Returns the ids removed.
+   */
+  collapse(nodeId: string): string[] {
+    this.expandedNodes.delete(nodeId);
+    const touches = (e: GraphEdge, id: string) => e.source === id || e.target === id;
+    const other = (e: GraphEdge, id: string) => (e.source === id ? e.target : e.source);
+    const candidates = new Set<string>([nodeId]);
+    for (const [key, e] of this.edges) {
+      if (!touches(e, nodeId)) continue;
+      candidates.add(other(e, nodeId));
+      if (!this.expandedNodes.has(other(e, nodeId))) this.edges.delete(key);
+    }
+    const nearExpanded = (id: string) =>
+      [...this.edges.values()].some((e) => touches(e, id) && this.expandedNodes.has(other(e, id)));
+    const removed = [...candidates].filter((id) => !this.expandedNodes.has(id) && !nearExpanded(id));
+    const gone = new Set(removed);
+    for (const id of removed) this.nodes.delete(id);
+    for (const [key, e] of this.edges) {
+      if (gone.has(e.source) || gone.has(e.target)) this.edges.delete(key);
+    }
+    return removed;
+  }
+
+  /**
    * Force-graph data. With `visibleTypes`, only edges of those types are drawn,
    * and a node is shown only if it was expanded or one of those edges reaches it.
    */

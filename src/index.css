@@ -187,16 +187,15 @@ input {
   }
   .search-group {
     flex: 1 1 auto !important;
-    gap: 0.4rem !important;
   }
   .search-group button,
   .search-reset {
-    min-height: 40px;
+    min-height: 44px;
     padding-left: 0.65rem !important;
     padding-right: 0.65rem !important;
   }
   .search-group input {
-    min-height: 40px;
+    min-height: 44px;
   }
 
   /* Node details: bottom sheet over the graph */
@@ -219,6 +218,10 @@ input {
   }
   .info-panel .info-link {
     min-height: 44px;
+  }
+  .info-panel .info-expand {
+    width: 44px !important;
+    height: 44px !important;
   }
 
   /* Home: one full-width button per row */
@@ -303,21 +306,32 @@ input {
   }
 }
 
-@keyframes highlight-fade {
-  0% {
-    background-color: rgba(255, 107, 107, 0.25);
-    border-color: #ff6b6b;
-    box-shadow: 0 0 8px rgba(255, 107, 107, 0.4);
-  }
-  100% {
-    background-color: #2a2a2a;
-    border-color: #444;
-    box-shadow: none;
-  }
+/* Graph search: the box and its + are one control, so the focus ring and the
+   highlight (a clicked node fills the box) go around both. */
+.search-group {
+  border-radius: 4px;
 }
-
-.search-input-highlight {
-  animation: highlight-fade 0.8s ease-out forwards;
+.search-group:focus-within {
+  outline: 2px solid #48dbfb;
+  outline-offset: 1px;
+}
+.search-group input:focus,
+.search-group button:focus {
+  outline: none;
+}
+.search-group-highlight {
+  animation: group-highlight-fade 0.8s ease-out forwards;
+}
+.search-group-highlight input {
+  animation: highlight-fill 0.8s ease-out forwards;
+}
+@keyframes group-highlight-fade {
+  0% { box-shadow: 0 0 0 1px #ff6b6b, 0 0 8px rgba(255, 107, 107, 0.4); }
+  100% { box-shadow: none; }
+}
+@keyframes highlight-fill {
+  0% { background-color: rgba(255, 107, 107, 0.25); }
+  100% { background-color: #2a2a2a; }
 }
 
 /* Scenes (in development): the world map's countries, and the scene panel (a card on the right; a bottom sheet on phones) */

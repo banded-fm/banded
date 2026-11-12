@@ -6,6 +6,12 @@ import { getArtistDetails, getDb, isDbLoaded, type ArtistDetails } from "../db/g
 interface Props {
   node: GraphNode;
   onClose: () => void;
+  /** Whether the node's connections are in the graph: the button then removes them. */
+  expanded?: boolean;
+  /** An expansion is loading (from this button or a search). */
+  busy?: boolean;
+  onExpand?: () => void;
+  onUnexpand?: () => void;
 }
 
 /** Names the graph's legend uses for the two artist node types. */
@@ -36,7 +42,17 @@ function useArtistDetails(node: GraphNode): ArtistDetails | null | "loading" {
   return details;
 }
 
-export function InfoPanel({ node, onClose }: Props) {
+/** A bin, for removing an artist's connections. */
+function TrashIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"
+      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" />
+    </svg>
+  );
+}
+
+export function InfoPanel({ node, onClose, expanded = false, busy = false, onExpand, onUnexpand }: Props) {
   const details = useArtistDetails(node);
   const loaded = details !== "loading" ? details : null;
   // A node made before details existed may carry its own disambiguation.
@@ -52,8 +68,29 @@ export function InfoPanel({ node, onClose }: Props) {
           ×
         </button>
       </div>
-      <h2 style={styles.name}>{node.name}</h2>
-      {disambiguation && <p style={styles.disambiguation}>{disambiguation}</p>}
+      {/* The name (and subtitle, when there is one) with the add/remove button beside them: centred against the
+          block, so it lines up with the name alone or sits between name and subtitle. */}
+      <div style={styles.titleRow}>
+        <div style={styles.titleText}>
+          <h2 style={styles.name}>{node.name}</h2>
+          {disambiguation && <p style={styles.disambiguation}>{disambiguation}</p>}
+        </div>
+        {isMusicBrainzArtist(node) && onExpand && onUnexpand && (
+          <button
+            type="button"
+            className="info-expand"
+            style={{ ...styles.iconBtn, ...(expanded ? styles.iconBtnRemove : {}) }}
+            onClick={expanded ? onUnexpand : onExpand}
+            disabled={busy && !expanded}
+            aria-label={expanded ? "Remove connections" : busy ? "Adding connections" : "Add connections"}
+            title={expanded
+              ? "Remove connections: what adding this artist's connections brought in"
+              : "Add connections: this artist's connections to the graph"}
+          >
+            {expanded ? <TrashIcon /> : busy ? "…" : "+"}
+          </button>
+        )}
+      </div>
 
       {isMusicBrainzArtist(node) && (
         <>
@@ -135,13 +172,47 @@ const styles: Record<string, React.CSSProperties> = {
   name: {
     fontSize: "1.2rem",
     fontWeight: 600,
-    marginBottom: "0.25rem",
+    marginBottom: 0,
     overflowWrap: "anywhere",
   },
   disambiguation: {
     color: "#bbb",
     fontSize: "0.9rem",
-    marginBottom: "0.6rem",
+    marginTop: "0.2rem",
+  },
+  // The bin: the + inverted (outline), so removing reads as the opposite of adding.
+  iconBtnRemove: {
+    background: "transparent",
+    color: "#ff6b6b",
+    boxShadow: "inset 0 0 0 1.5px #ff6b6b",
+  },
+  titleRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.75rem",
+    marginBottom: "0.75rem",
+  },
+  titleText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  // Small and square, in the search bar +'s colours.
+  iconBtn: {
+    flex: "none",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "32px",
+    height: "32px",
+    padding: 0,
+    borderRadius: "4px",
+    border: "none",
+    background: "#ff6b6b",
+    color: "#fff",
+    fontWeight: 700,
+    fontSize: "1.2rem",
+    lineHeight: 1,
+    cursor: "pointer",
   },
   genres: {
     display: "flex",

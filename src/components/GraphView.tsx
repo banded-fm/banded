@@ -6,6 +6,8 @@ import { LABEL_FONT, LINE_HEIGHT, boxCollide, edgeOffset, layoutBubble, type Bub
 interface Props {
   data: ForceGraphData;
   onNodeClick: (node: { id?: string | number }) => void;
+  /** A click or tap on empty space or a link (not a drag to pan). */
+  onBackgroundClick?: () => void;
 }
 
 type GraphNode = NodeObject & { name?: string; type?: string; color?: string; expanded?: boolean };
@@ -50,7 +52,7 @@ function roundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, b: Bub
   ctx.closePath();
 }
 
-export function GraphView({ data, onNodeClick }: Props) {
+export function GraphView({ data, onNodeClick, onBackgroundClick }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const graphRef = useRef<ForceGraphMethods | undefined>(undefined);
 
@@ -120,6 +122,8 @@ export function GraphView({ data, onNodeClick }: Props) {
         nodeLabel={isTouch ? "" : "name"}
         nodeColor="color"
         onNodeClick={onNodeClick}
+        onBackgroundClick={onBackgroundClick}
+        onLinkClick={onBackgroundClick}
         onEngineTick={setForces}
         onEngineStop={() => {
           if (!fitPending.current) return;
