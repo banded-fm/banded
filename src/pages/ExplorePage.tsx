@@ -171,6 +171,31 @@ export function ExplorePage() {
     [graph]
   );
 
+  // The panel's buttons: expand the selected artist (by its exact ID, as a search would), or unexpand it.
+  const expandNode = useCallback((node: GraphNode) => handleSearch(node.name, node.id), [handleSearch]);
+  const unexpandNode = useCallback((node: GraphNode) => {
+    const removed = graph.collapse(node.id);
+    debugLog.log(`Removing "${node.name}"'s connections: ${removed.length} artists left the graph`);
+    graph.save();
+    setVersion((v) => v + 1);
+    // The artist itself may be gone, or only connected by a relationship the legend hides: close its panel.
+    if (!graph.toForceGraphData(new Set(visibleRels)).nodes.some((n) => n.id === node.id)) setSelectedNode(null);
+  }, [graph, visibleRels]);
+
+  // A click or tap outside the panel closes it. On the graph, empty space and links close it (GraphView's
+  // onBackgroundClick: not a drag to pan) and a node switches to that node; anywhere else on the page closes it.
+  const closePanel = useCallback(() => setSelectedNode(null), []);
+  useEffect(() => {
+    if (!selectedNode) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const t = e.target as Element | null;
+      if (!t || t.closest(".info-panel") || t.closest("canvas")) return;
+      setSelectedNode(null);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [selectedNode]);
+
   const handleReset = useCallback(() => {
     graph.clear();
     setVersion((v) => v + 1);
@@ -201,10 +226,17 @@ export function ExplorePage() {
       {!dbReady && <div style={{ color: "#888", padding: "0.5rem 1rem", fontSize: "0.85rem" }}>Loading the full graph in the background. Searches use the server until it's ready.</div>}
       {error && <div style={{ color: "#ff6b6b", padding: "0.5rem 1rem" }}>{error}</div>}
       <div style={{ display: "flex", flex: 1, overflow: "hidden", position: "relative" }}>
-        <GraphView data={graphData} onNodeClick={handleNodeClick} />
+        <GraphView data={graphData} onNodeClick={handleNodeClick} onBackgroundClick={closePanel} />
         <GraphLegend visible={visibleRels} onToggle={toggleRel} />
         {selectedNode && (
-          <InfoPanel node={selectedNode} onClose={() => setSelectedNode(null)} />
+          <InfoPanel
+            node={selectedNode}
+            onClose={() => setSelectedNode(null)}
+            expanded={graph.isExpanded(selectedNode.id)}
+            busy={loading}
+            onExpand={() => expandNode(selectedNode)}
+            onUnexpand={() => unexpandNode(selectedNode)}
+          />
         )}
       </div>
     </>
