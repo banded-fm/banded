@@ -120,8 +120,9 @@ export function ExplorePage() {
   const [dbReady, setDbReady] = useState(isDbLoaded());
   const [error, setError] = useState<string | null>(null);
   const [prefill, setPrefill] = useState<string | null>(null);
-  // Remembers the MBID of the last clicked node so a subsequent search can
-  // resolve by ID instead of by ambiguous name (e.g. two artists named "Fuzz").
+  // The MBID behind the search box's text: the last clicked node, or the artist the last search added (picked
+  // from the dropdown or found by name). A search for that exact text resolves by ID instead of by an ambiguous
+  // name (e.g. two artists named "Fuzz"); other text searches by name.
   const pendingNode = useRef<{ name: string; id: string } | null>(null);
 
   // The graph downloads in the background (main.tsx); search works meanwhile.
@@ -145,7 +146,6 @@ export function ExplorePage() {
         // went to the server, which says nothing about the graph's coverage.
         const lookedUpLocally = isDbLoaded();
         const found = await expandArtist(resolution, graph);
-        pendingNode.current = null;
         if (!found) {
           setError(`No artist found for "${artistName}"`);
           if (lookedUpLocally) {
@@ -159,6 +159,8 @@ export function ExplorePage() {
             const { reportMiss } = await import("../api/supabase");
             reportMiss(found, "explore-not-in-graph");
           }
+          // The box still shows this text: + again (after Reset, say) means this same artist, not a namesake.
+          pendingNode.current = { name: artistName, id: found };
           graph.save();
           setVersion((v) => v + 1);
         }
@@ -200,7 +202,8 @@ export function ExplorePage() {
     graph.clear();
     setVersion((v) => v + 1);
     setSelectedNode(null);
-    pendingNode.current = null;
+    // pendingNode is kept: the search box keeps its text, and that text still means the artist that was clicked
+    // (it's only used while the box holds exactly that name), so + after Reset adds the same artist, not a namesake.
     setError(null);
   }, [graph]);
 
