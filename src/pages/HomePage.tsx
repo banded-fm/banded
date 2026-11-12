@@ -4,11 +4,11 @@ import { SiteFooter } from "../components/SiteFooter";
 /** The pages the home screen links to, in nav order. */
 export const HOME_LINKS = [
   { to: "/graph", label: "Graph", description: "Search artists and walk through their network: band members, side projects and collaborators." },
-  { to: "/map", label: "Map", description: "A world map of music scenes: the artists in each city who play and record together, with their era, genres and best-known names." },
-  { to: "/proximity", label: "Proximity", description: "Score how close any artist is to a list of artists you love, and see the connections behind the score." },
+  { to: "/map", label: "Map", description: "Explore the world’s music scenes based on the artist clusters in the graph." },
+  { to: "/proximity", label: "Proximity", description: "Find out how close any artist is to a list of artists you already know, and see their connections." },
   { to: "/upcoming", label: "Upcoming", description: "Find upcoming concerts in a city, ranked by how well they fit the artists you like." },
-  { to: "/play", label: "Play", description: "Six Degrees of Music: a daily puzzle. Connect two artists through the people and bands between them, in as few moves as you can." },
-  { to: "/about", label: "About", description: "How it works and where the data comes from." },
+  { to: "/play", label: "Play", description: "Six Degrees of Music: a daily puzzle. Connect two artists through the people and bands between them. Also create your own puzzles and share them with friends." },
+  { to: "/about", label: "About", description: "How it works and FAQs" },
 ];
 
 export function HomePage() {
