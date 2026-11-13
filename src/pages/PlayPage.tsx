@@ -1,12 +1,17 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { GAME_ARTISTS, type GameArtist } from "../game/artists";
-import { getDb, isDbLoaded, findNodeByName, bfsShortestPath, findNodeById } from "../db/graphDb";
+import { getDb, isDbLoaded, findNodeByName, bfsShortestPath, findNodeById, distancesFrom } from "../db/graphDb";
+import { AWAY_DEPTH, awayLabel } from "../game/distance";
 import { walkGame, walkKey, type Walk } from "../game/walk";
 import { dailyPuzzle, findPuzzle, localDate, randomPuzzle, type Puzzle } from "../game/puzzles";
 import { DebugConsole } from "../components/DebugConsole";
 import { ArtistAutocomplete } from "../components/ArtistAutocomplete";
 import { debugLog } from "../debug/DebugLog";
+import { parVerdict } from "../game/result";
+import { shareText } from "../game/shareText";
+import { ShareDialog } from "../components/ShareDialog";
+import { ShareIcon } from "../components/ShareIcon";
 
 /**
  * "loading": the game isn't known yet (a random game needs the graph to find a
@@ -291,7 +296,21 @@ export function PlayPage() {
   const [customEndPick, setCustomEndPick] = useState<Pick | null>(null);
   const [customError, setCustomError] = useState<string | null>(null);
   const [customLoading, setCustomLoading] = useState(false);
-  const [shareCopied, setShareCopied] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  // Set by a step, so the share dialog opens when that step wins (not when a won game is reopened later).
+  const justStepped = useRef(false);
+  const movesListRef = useRef<HTMLDivElement>(null);
+  const customFormRef = useRef<HTMLDivElement>(null);
+
+  // A new puzzle (or a step along this one) replaces the connections: show them from the top.
+  useEffect(() => {
+    if (movesListRef.current) movesListRef.current.scrollTop = 0;
+  }, [state.startId, state.endId, state.guesses.length]);
+
+  // Opening Custom Game brings its start and end boxes into view (they open below the buttons, often off screen).
+  useEffect(() => {
+    if (showCustom) customFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [showCustom]);
 
   // Where the game has got to and the moves from there: from the server until the
   // graph has downloaded, then from the graph (worked out again when it arrives).
@@ -316,6 +335,25 @@ export function PlayPage() {
   const current = walk && walk.key === key && !walk.failed ? walk : null;
   const movesFailed = !!walk && walk.key === key && !!walk.failed;
   const visitedIds = new Set(current?.ids ?? []);
+  // How far every artist near the end is from it (worked out once per puzzle, after the page has drawn).
+  const [away, setAway] = useState<{ endId: string; dist: Map<string, number> } | null>(null);
+  useEffect(() => {
+    const endId = state.endId;
+    if (!endId || !dbReady || away?.endId === endId) return;
+    const t = setTimeout(() => { const dist = distancesFrom(endId, AWAY_DEPTH); if (dist) setAway({ endId, dist }); }, 0);
+    return () => clearTimeout(t);
+  }, [state.endId, dbReady]); // eslint-disable-line react-hooks/exhaustive-deps
+  const awayOf = (id: string) => (away && away.endId === state.endId ? away.dist.get(id) : undefined);
+  const awayKnown = !!away && away.endId === state.endId;
+  const lastId = current && current.ids.length > 1 ? current.ids[current.ids.length - 1] : undefined;
+
+  // Won: the last step reached the end artist (by ID, so a namesake or a typed name that isn't a move doesn't count).
+  const won = !!current && state.guesses.length > 0 && current.ids.length === state.guesses.length + 1
+    && current.ids[current.ids.length - 1] === state.endId;
+  useEffect(() => {
+    if (won && justStepped.current) setShareOpen(true);
+    if (won) justStepped.current = false;
+  }, [won]);
 
   // Valid next moves: neighbors of the current artist, excluding ones already visited
   const validMoves = (() => {
@@ -381,27 +419,6 @@ export function PlayPage() {
     setState(playing(game));
   }, [customStart, customEnd, customStartPick, customEndPick, setSearchParams]);
 
-  const handleShare = useCallback(() => {
-    if (!state.startId || !state.endId) return;
-    const url = new URL(window.location.href);
-    const params = new URLSearchParams({
-      start: state.startId!,
-      end: state.endId!,
-    });
-    url.hash = `#/play?${params.toString()}`;
-    const shareUrl = url.toString();
-
-    const done = () => {
-      setShareCopied(true);
-      setTimeout(() => setShareCopied(false), 2000);
-    };
-
-    if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(shareUrl).then(done).catch(done);
-    } else {
-      done();
-    }
-  }, [state]);
 
   // Download the graph, then finish whatever the first render couldn't: a shared
   // game's path, or a new random game. A saved game is already playing.
@@ -443,6 +460,7 @@ export function PlayPage() {
     if (!guess || state.status !== "playing") return;
     const newGuesses = [...state.guesses, guess];
     setInput("");
+    justStepped.current = true;
 
     const newState = { ...state, guesses: newGuesses };
     setState(newState);
@@ -505,6 +523,32 @@ export function PlayPage() {
   const listedPuzzle = state.startId && state.endId ? findPuzzle(state.startId, state.endId) : undefined;
   const pathNodes = new Map((listedPuzzle?.path ?? []).map((a) => [a.id, a] as const));
 
+  // What the share dialog shares: the result once won, else the puzzle (also after giving up).
+  const shareUrl = (() => {
+    if (!state.startId || !state.endId) return "";
+    const url = new URL(window.location.href);
+    url.search = "";
+    url.hash = `#/play?${new URLSearchParams({ start: state.startId, end: state.endId }).toString()}`;
+    return url.toString();
+  })();
+  // How far each step was from the end: past AWAY_DEPTH counts as AWAY_DEPTH + 1 once the distances are known.
+  const steps = current && awayKnown
+    ? current.ids.slice(1).map((id) => awayOf(id) ?? AWAY_DEPTH + 1)
+    : (current?.ids.slice(1) ?? state.guesses).map(() => undefined);
+  const share = state.startArtist && state.endArtist ? shareText({
+    start: state.startArtist.name,
+    end: state.endArtist.name,
+    dateLabel: state.daily ? new Date(`${state.daily}T12:00:00`).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : undefined,
+    steps,
+    won,
+    par: state.par,
+    url: shareUrl,
+  }) : "";
+  const shareTitle = won ? "You connected them!" : "Share this puzzle";
+  const shareSummary = won
+    ? `${state.guesses.length} ${state.guesses.length === 1 ? "step" : "steps"}${state.par != null ? ` · Par ${state.par}: ${parVerdict(state.guesses.length, state.par)}` : ""}`
+    : undefined;
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") handleGuess();
   };
@@ -529,6 +573,17 @@ export function PlayPage() {
 
         {state.status !== "error" && (
           <div className="endpoints-card" style={styles.endpointsCard} aria-busy={state.status === "loading"}>
+            <button
+              type="button"
+              onClick={() => setShareOpen(true)}
+              disabled={!share}
+              className="share-btn"
+              style={styles.shareBtn}
+              aria-label={won ? "Share your result" : "Share this puzzle"}
+              title={won ? "Share your result" : "Share this puzzle"}
+            >
+              <ShareIcon />
+            </button>
             <div style={styles.endpoint}>
               <span style={styles.endpointLabel}>Start</span>
               {state.startArtist
@@ -567,7 +622,50 @@ export function PlayPage() {
         {state.status !== "error" && (
           <>
             {state.status === "playing" && (<>
-            {!state.revealed && (
+            {(won || state.revealed) && (
+              <div style={styles.wonSection} role="status">
+                <p style={styles.wonTitle}>
+                  {won ? `You connected them in ${state.guesses.length} ${state.guesses.length === 1 ? "step" : "steps"}!` : "You gave up!"}
+                </p>
+                {won && state.par != null && <p style={styles.wonDetail}>Par {state.par}: {parVerdict(state.guesses.length, state.par)}</p>}
+                {won && <div style={styles.guessList}>
+                  <span style={styles.guessChip}>{state.startArtist!.name}</span>
+                  {state.guesses.map((g, i) => (
+                    <span key={i} style={styles.guessStep}>
+                      <span style={styles.chainArrow}>→</span>
+                      <span style={i === state.guesses.length - 1 ? styles.guessChipCurrent : styles.guessChip}>{g}</span>
+                    </span>
+                  ))}
+                </div>}
+                {/* The par (or shortest) path, once revealed: after giving up, or asked for after a win */}
+                {state.revealed && (
+                  <>
+                    {won && <p style={styles.wonDetail}>{state.listed ? "Par path" : "Shortest path"}:</p>}
+                    <div style={styles.chainDisplay}>
+                      {state.shortestPath!.map((nodeId, i) => {
+                        const node = pathNodes.get(nodeId) ?? findNodeById(nodeId);
+                        return (
+                          <span key={nodeId} style={styles.chainItem}>
+                            <span style={styles.guessChip}>{node?.name ?? nodeId}</span>
+                            {i < state.shortestPath!.length - 1 && <span style={styles.chainArrow}>→</span>}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+                <div style={styles.resultButtons}>
+                  <button onClick={() => setShareOpen(true)} style={styles.shareResultBtn}>Share</button>
+                  {won && !state.revealed && (
+                    <button onClick={handleReveal} style={styles.revealBtn}>
+                      {state.listed ? "Show Par Path" : "Show Shortest Path"}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {!state.revealed && !won && (
               <div style={styles.inputSection}>
                 <div style={styles.guessList}>
                   <span style={styles.guessChip}>{state.startArtist!.name}</span>
@@ -580,7 +678,10 @@ export function PlayPage() {
                   <span style={styles.chainArrow}>→ ?</span>
                 </div>
                 <div style={styles.pathActions}>
-                  <span style={styles.stepCount}>{state.guesses.length} steps</span>
+                  <span style={styles.stepCount}>
+                    {state.guesses.length} {state.guesses.length === 1 ? "step" : "steps"}
+                    {lastId && awayKnown && <> · <strong style={styles.away}>{awayLabel(awayOf(lastId))}</strong> from {state.endArtist!.name}</>}
+                  </span>
                   {state.guesses.length > 0 && (
                     <button onClick={handleUndo} style={styles.undoBtn}>
                       ← Undo
@@ -598,7 +699,7 @@ export function PlayPage() {
                     aria-label="Filter connections"
                   />
                 </div>
-                <div className="moves-list" style={styles.movesList} aria-busy={!current}>
+                <div ref={movesListRef} className="moves-list" style={styles.movesList} aria-busy={!current}>
                   {!current ? (
                     // The path so far, Undo and the filter stay put while the moves load.
                     [0, 1, 2, 3].map((i) => (
@@ -629,45 +730,11 @@ export function PlayPage() {
                   </p>
                 )}
                 <button onClick={handleReveal} style={styles.revealBtn}>
-                  {state.listed ? "Reveal Par Path" : "Reveal Shortest Path"}
+                  Give up and reveal
                 </button>
               </div>
             )}
 
-            {state.revealed && (
-              <div style={styles.revealSection}>
-                <p style={styles.revealLabel}>
-                  {state.listed ? "Par path through well-known artists" : "Shortest path"} ({state.shortestPath!.length - 1} hops):
-                </p>
-                <div style={styles.chainDisplay}>
-                  {state.shortestPath!.map((nodeId, i) => {
-                    const node = pathNodes.get(nodeId) ?? findNodeById(nodeId);
-                    return (
-                      <span key={nodeId} style={styles.chainItem}>
-                        <span style={node?.type === "person" ? styles.personChip : node?.type === "group" ? styles.bandChip : styles.albumChip}>
-                          {node?.name ?? nodeId}
-                        </span>
-                        {i < state.shortestPath!.length - 1 && <span style={styles.chainArrow}>→</span>}
-                      </span>
-                    );
-                  })}
-                </div>
-                {state.guesses.length > 0 && (
-                  <div style={styles.guessList}>
-                    <p style={styles.guessLabel}>Your path ({state.guesses.length + 1} hops):</p>
-                    <span style={styles.guessChip}>{state.startArtist!.name}</span>
-                    <span style={styles.chainArrow}>→</span>
-                    {state.guesses.map((g, i) => (
-                      <span key={i}>
-                        <span style={styles.guessChip}>{g}</span>
-                        <span style={styles.chainArrow}>→</span>
-                      </span>
-                    ))}
-                    <span style={styles.guessChip}>{state.endArtist!.name}</span>
-                  </div>
-                )}
-              </div>
-            )}
 
             </>)}
 
@@ -683,13 +750,10 @@ export function PlayPage() {
               <button onClick={() => { setShowCustom((s) => !s); setCustomError(null); }} style={styles.customBtn}>
                 Custom Game
               </button>
-              <button onClick={handleShare} disabled={!state.startId || !state.endId} style={styles.shareBtn}>
-                {shareCopied ? "Copied!" : "Share"}
-              </button>
             </div>
 
             {showCustom && (
-              <div style={styles.customForm}>
+              <div ref={customFormRef} style={styles.customForm}>
                 <p style={styles.customHint}>
                   Pick your own start and end — any two artists or groups that are connected.
                 </p>
@@ -728,6 +792,7 @@ export function PlayPage() {
           </>
         )}
       </div>
+      <ShareDialog open={shareOpen} onClose={() => setShareOpen(false)} title={shareTitle} summary={shareSummary} text={share} />
     </div>
   );
 }
@@ -736,17 +801,18 @@ const styles: Record<string, React.CSSProperties> = {
   page: { flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" },
   container: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "1.5rem", overflowY: "auto", gap: "1rem" },
   header: { textAlign: "center" },
+  // The share button hangs off the end of the title (the title stays centred).
   title: { fontSize: "1.6rem", fontWeight: 700, color: "#e0e0e0", marginBottom: "0.25rem" },
   subtitle: { color: "#888", fontSize: "0.9rem" },
   card: { background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: "8px", padding: "2rem", textAlign: "center" },
   loadingText: { color: "#e0e0e0", fontSize: "1rem", marginBottom: "0.5rem" },
   hint: { color: "#666", fontSize: "0.8rem" },
   errorText: { color: "#ff6b6b", marginBottom: "1rem" },
-  endpointsCard: { display: "flex", alignItems: "center", gap: "1rem", background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: "8px", padding: "1.25rem 1.5rem", flexWrap: "wrap", justifyContent: "center" },
+  endpointsCard: { position: "relative", display: "flex", alignItems: "center", gap: "1rem", background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: "8px", padding: "1.25rem 44px", flexWrap: "wrap", justifyContent: "center" },
   endpoint: { display: "flex", flexDirection: "column", alignItems: "center", gap: "0.25rem" },
   endpointLabel: { fontSize: "0.7rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "#888" },
   endpointName: { fontSize: "1.2rem", fontWeight: 700, color: "#feca57" },
-  parBadge: { background: "#2a2a2a", color: "#55efc4", padding: "0.3rem 0.8rem", borderRadius: "12px", fontSize: "0.85rem", fontWeight: 600 },
+  parBadge: { background: "#2a2a2a", color: "#fff", padding: "0.3rem 0.8rem", borderRadius: "12px", fontSize: "0.85rem", fontWeight: 600 },
   inputSection: { display: "flex", flexDirection: "column", alignItems: "center", gap: "0.75rem", width: "100%", maxWidth: "400px" },
   inputLabel: { color: "#aaa", fontSize: "0.85rem" },
   inputRow: { display: "flex", gap: "0.5rem", width: "100%" },
@@ -768,16 +834,19 @@ const styles: Record<string, React.CSSProperties> = {
   stepCount: { color: "#888", fontSize: "0.8rem" },
   undoBtn: { padding: "0.3rem 0.75rem", borderRadius: "4px", border: "1px solid #feca57", background: "transparent", color: "#feca57", cursor: "pointer", fontSize: "0.8rem", fontWeight: 600 },
   revealSection: { display: "flex", flexDirection: "column", alignItems: "center", gap: "0.75rem" },
-  revealLabel: { color: "#55efc4", fontWeight: 600, fontSize: "0.9rem" },
+  wonSection: { display: "flex", flexDirection: "column", alignItems: "center", gap: "0.6rem", width: "100%", maxWidth: "600px", textAlign: "center" },
+  wonTitle: { color: "#fff", fontWeight: 700, fontSize: "1.15rem" },
+  wonDetail: { color: "#888", fontSize: "0.9rem" },
   chainDisplay: { display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "center", gap: "0.25rem" },
   chainItem: { display: "flex", alignItems: "center", gap: "0.25rem" },
-  personChip: { padding: "0.3rem 0.7rem", borderRadius: "12px", fontSize: "0.85rem", background: "rgba(254, 202, 87, 0.15)", color: "#feca57", border: "1px solid #feca57" },
-  bandChip: { padding: "0.3rem 0.7rem", borderRadius: "12px", fontSize: "0.85rem", background: "rgba(255, 107, 107, 0.15)", color: "#ff6b6b", border: "1px solid #ff6b6b" },
-  albumChip: { padding: "0.3rem 0.7rem", borderRadius: "12px", fontSize: "0.85rem", background: "rgba(85, 239, 196, 0.15)", color: "#55efc4", border: "1px solid #55efc4" },
   newGameBtn: { padding: "0.6rem 1.25rem", borderRadius: "4px", border: "none", background: "#ff6b6b", color: "#fff", fontWeight: 600, cursor: "pointer", fontSize: "0.9rem", marginTop: "0.5rem" },
   gameButtons: { display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "0.5rem", marginTop: "0.5rem" },
   customBtn: { padding: "0.6rem 1.25rem", borderRadius: "4px", border: "1px solid #48dbfb", background: "transparent", color: "#48dbfb", fontWeight: 600, cursor: "pointer", fontSize: "0.9rem", marginTop: "0.5rem" },
-  shareBtn: { padding: "0.6rem 1.25rem", borderRadius: "4px", border: "1px solid #55efc4", background: "transparent", color: "#55efc4", fontWeight: 600, cursor: "pointer", fontSize: "0.9rem", marginTop: "0.5rem" },
+  away: { color: "#e0e0e0", fontWeight: 600 },
+  // In the card's right edge, centred: the card leaves 44 px for it
+  shareBtn: { position: "absolute", top: "50%", right: 0, transform: "translateY(-50%)", width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, border: "none", borderRadius: "8px", background: "transparent", color: "#aaa", cursor: "pointer" },
+  resultButtons: { display: "flex", gap: "0.5rem", flexWrap: "wrap", justifyContent: "center" },
+  shareResultBtn: { minHeight: "44px", padding: "0.5rem 1.25rem", borderRadius: "4px", border: "none", background: "#ff6b6b", color: "#fff", fontWeight: 600, cursor: "pointer", fontSize: "0.9rem" },
   customForm: { display: "flex", flexDirection: "column", gap: "0.5rem", width: "100%", maxWidth: "400px", background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: "8px", padding: "1rem" },
   customHint: { color: "#888", fontSize: "0.8rem", marginBottom: "0.25rem" },
   customError: { color: "#ff6b6b", fontSize: "0.8rem" },

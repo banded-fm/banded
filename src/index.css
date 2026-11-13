@@ -138,6 +138,14 @@ input {
   cursor: default;
 }
 
+/* Play: the share dialog's backdrop */
+.share-dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
+
+/* Play: the share button at the right of the Start/End card */
+.share-btn:hover:not(:disabled) { color: #e0e0e0 !important; background: #2a2a2a !important; }
+.share-btn:focus-visible { outline: 2px solid #48dbfb; outline-offset: -2px; }
+.share-btn:disabled { opacity: 0.35; cursor: default !important; }
+
 @media (max-width: 640px) {
   /* Explore legend: 44px tap targets */
   .graph-legend .graph-legend-row {
@@ -261,8 +269,8 @@ input {
   }
   .endpoints-card {
     width: 100%;
-    padding: 1rem !important;
-    gap: 0.75rem !important;
+    padding: 1rem 44px 1rem 1rem !important; /* the share button sits in the right 44 px */
+    gap: 0.5rem !important;
   }
   .endpoint-name {
     font-size: 1.1rem !important;

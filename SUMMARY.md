@@ -113,7 +113,16 @@ Game mode (Six Degrees of Music):
     Custom game → user picks any two connected artists/bands (no same-type requirement);
                   par = shortest path hops over all links (a listed pair keeps its listed par)
     Shared game → URL params (?start=<mbid>&end=<mbid>) load the exact same puzzle;
-                  Share button copies an MBID-based link (avoids name ambiguity)
+                  the share icon (right of the Start/End card; Apple's symbol on Apple devices,
+                  Material's three dots elsewhere) opens a share dialog: the puzzle's MBID-based
+                  link (avoids name ambiguity), or once won (the dialog opens by itself then) a
+                  Wordle-style result: a square per step by how far it was from the end (🟩 the end,
+                  🟨 1 away, 🟧 2, 🟥 3+), steps vs par, the link (game/shareText.ts)
+    Distance     → after each step, "N away from <end>" (BFS out from the end to 3 steps, once
+                  per puzzle: game/distance.ts, graphDb.distancesFrom)
+    Give up      → "Give up and reveal": "You gave up!" where a win's result goes, the par (or
+                  shortest) path and a Share button
+    Win          → the last step is the end artist (by ID): the list gives way to the result
 
 Similarity mode (artist-to-scene fit scoring):
     User enters a list of artists + one target artist to compare
