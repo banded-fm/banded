@@ -117,9 +117,13 @@ Game mode (Six Degrees of Music):
                   Material's three dots elsewhere) opens a share dialog: the puzzle's MBID-based
                   link (avoids name ambiguity), or once won (the dialog opens by itself then) a
                   Wordle-style result: a square per step by how far it was from the end (🟩 the end,
-                  🟨 1 away, 🟧 2, 🟥 3+), steps vs par, the link (game/shareText.ts)
+                  🟨 1 away, 🟧 2, 🟥 3+, ❓ hinted, ❌ gave up), steps vs par, the link
+                  (game/shareText.ts)
     Distance     → after each step, "N away from <end>" (BFS out from the end to 3 steps, once
-                  per puzzle: game/distance.ts, graphDb.distancesFrom)
+                  per puzzle: game/distance.ts, graphDb.distancesFrom); the guesses' pills
+                  take the same colours as the shared squares
+    Hint         → colours the connections at this position by distance (once per position,
+                  saved with the game); a step picked from a hinted list shares as ❓ then its square
     Give up      → "Give up and reveal": "You gave up!" where a win's result goes, the par (or
                   shortest) path and a Share button
     Win          → the last step is the end artist (by ID): the list gives way to the result

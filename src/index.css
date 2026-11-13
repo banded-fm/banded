@@ -133,6 +133,9 @@ input {
 .home-card:hover { border-color: #ff6b6b !important; background: #202020 !important; }
 .home-card:focus-visible { outline: 2px solid #48dbfb; outline-offset: 2px; }
 
+/* Play: the hint button once used, or before the graph has loaded */
+.page-container button:disabled[title] { opacity: 0.45; cursor: default !important; }
+
 .game-buttons button:disabled {
   opacity: 0.45;
   cursor: default;
