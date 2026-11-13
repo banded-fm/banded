@@ -35,6 +35,8 @@ interface GameState {
   daily?: string;
   guesses: string[];
   revealed: boolean;
+  /** Where the hint was used: the number of steps taken when it was (its list's position). */
+  hints?: number[];
 }
 
 const GAME_STORAGE_KEY = "banded_current_game";
@@ -51,6 +53,7 @@ interface StoredGame {
   daily?: string;
   guesses: string[];
   revealed: boolean;
+  hints?: number[];
   timestamp: number;
 }
 
@@ -93,6 +96,7 @@ function playing(game: StoredGame): GameState {
     daily: game.daily,
     guesses: game.guesses,
     revealed: game.revealed,
+    hints: game.hints,
   };
 }
 
@@ -281,6 +285,13 @@ function formatRelType(relType: string, nodeType: string, outgoing: boolean): st
     case "opened_for": return outgoing ? "headliner" : "opener";
     default: return relType.replace(/_/g, " ");
   }
+}
+
+/** How far from the end, as in the shared squares: the end, 1 away, 2 away, 3 or more. */
+const AWAY_COLOURS = ["#2ed573", "#feca57", "#ff9f43", "#ff6b6b"];
+function awayChip(d: number): React.CSSProperties {
+  const c = AWAY_COLOURS[Math.min(d, 3)]!;
+  return { padding: "0.2rem 0.6rem", borderRadius: "12px", fontSize: "0.8rem", background: `${c}26`, color: c, border: `1px solid ${c}` };
 }
 
 export function PlayPage() {
@@ -475,6 +486,7 @@ export function PlayPage() {
       daily: state.daily,
       guesses: newGuesses,
       revealed: state.revealed,
+      hints: state.hints,
       timestamp: Date.now(),
     });
   };
@@ -496,6 +508,7 @@ export function PlayPage() {
       daily: state.daily,
       guesses: newGuesses,
       revealed: state.revealed,
+      hints: state.hints,
       timestamp: Date.now(),
     });
   };
@@ -515,6 +528,30 @@ export function PlayPage() {
       daily: state.daily,
       guesses: state.guesses,
       revealed: true,
+      hints: state.hints,
+      timestamp: Date.now(),
+    });
+  };
+
+  // The hint colours the connections here by how far each is from the end. Counted once per position.
+  const handleHint = () => {
+    if (state.status !== "playing") return;
+    const at = state.guesses.length;
+    if (state.hints?.includes(at)) return;
+    const hints = [...(state.hints ?? []), at];
+    setState({ ...state, hints });
+    saveGame({
+      startArtist: state.startArtist!,
+      endArtist: state.endArtist!,
+      startId: state.startId!,
+      endId: state.endId!,
+      shortestPath: state.shortestPath!,
+      par: state.par!,
+      listed: state.listed,
+      daily: state.daily,
+      guesses: state.guesses,
+      revealed: state.revealed,
+      hints,
       timestamp: Date.now(),
     });
   };
@@ -540,14 +577,22 @@ export function PlayPage() {
     end: state.endArtist.name,
     dateLabel: state.daily ? new Date(`${state.daily}T12:00:00`).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : undefined,
     steps,
+    hinted: state.hints,
     won,
+    gaveUp: state.revealed && !won,
     par: state.par,
     url: shareUrl,
   }) : "";
-  const shareTitle = won ? "You connected them!" : "Share this puzzle";
+  const shareTitle = won ? "You connected them!" : state.revealed ? "You gave up" : "Share this puzzle";
   const shareSummary = won
     ? `${state.guesses.length} ${state.guesses.length === 1 ? "step" : "steps"}${state.par != null ? ` · Par ${state.par}: ${parVerdict(state.guesses.length, state.par)}` : ""}`
-    : undefined;
+    : state.revealed ? `After ${state.guesses.length} ${state.guesses.length === 1 ? "step" : "steps"}` : undefined;
+  // A guess's pill, coloured by how far that artist is from the end (plain until that's known)
+  const stepChip = (i: number) => {
+    const id = current && current.ids.length === state.guesses.length + 1 ? current.ids[i + 1] : undefined;
+    return id && awayKnown ? awayChip(awayOf(id) ?? AWAY_DEPTH + 1) : styles.guessChip;
+  };
+  const hintedHere = !!state.hints?.includes(state.guesses.length);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") handleGuess();
@@ -633,7 +678,7 @@ export function PlayPage() {
                   {state.guesses.map((g, i) => (
                     <span key={i} style={styles.guessStep}>
                       <span style={styles.chainArrow}>→</span>
-                      <span style={i === state.guesses.length - 1 ? styles.guessChipCurrent : styles.guessChip}>{g}</span>
+                      <span style={stepChip(i)}>{g}</span>
                     </span>
                   ))}
                 </div>}
@@ -672,7 +717,7 @@ export function PlayPage() {
                   {state.guesses.map((g, i) => (
                     <span key={i} style={styles.guessStep}>
                       <span style={styles.chainArrow}>→</span>
-                      <span style={i === state.guesses.length - 1 ? styles.guessChipCurrent : styles.guessChip}>{g}</span>
+                      <span style={stepChip(i)}>{g}</span>
                     </span>
                   ))}
                   <span style={styles.chainArrow}>→ ?</span>
@@ -687,6 +732,14 @@ export function PlayPage() {
                       ← Undo
                     </button>
                   )}
+                  <button
+                    onClick={handleHint}
+                    disabled={!awayKnown || hintedHere}
+                    style={styles.hintBtn}
+                    title={awayKnown ? "Colour these connections by how far each is from the end" : "Available once the graph has loaded"}
+                  >
+                    {hintedHere ? "Hint used" : "Hint"}
+                  </button>
                 </div>
                 <div style={styles.inputRow}>
                   <input
@@ -708,18 +761,24 @@ export function PlayPage() {
                       </div>
                     ))
                   ) : filteredMoves.length > 0 ? (
-                    filteredMoves.map((m) => (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => handleGuess(m.name)}
-                        className="move-item"
-                        style={styles.moveItem}
-                      >
-                        <span style={styles.moveName}>{m.name}</span>
-                        <span style={styles.moveRel}>{formatRelType(m.relType, m.type, m.outgoing)}</span>
-                      </button>
-                    ))
+                    filteredMoves.map((m) => {
+                      const d = hintedHere && awayKnown ? (awayOf(m.id) ?? AWAY_DEPTH + 1) : undefined;
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => handleGuess(m.name)}
+                          className="move-item"
+                          style={d === undefined ? styles.moveItem : { ...styles.moveItem, boxShadow: `inset 4px 0 0 ${AWAY_COLOURS[Math.min(d, 3)]}` }}
+                        >
+                          <span style={styles.moveName}>{m.name}</span>
+                          <span style={styles.moveRel}>
+                            {formatRelType(m.relType, m.type, m.outgoing)}
+                            {d !== undefined && <> · <span style={{ color: AWAY_COLOURS[Math.min(d, 3)], fontWeight: 600 }}>{awayLabel(d > AWAY_DEPTH ? undefined : d)}</span></>}
+                          </span>
+                        </button>
+                      );
+                    })
                   ) : (
                     <p style={styles.noMoves}>No matching connections</p>
                   )}
@@ -823,14 +882,14 @@ const styles: Record<string, React.CSSProperties> = {
   moveName: { flex: 1 },
   moveRel: { color: "#666", fontSize: "0.7rem", marginLeft: "0.5rem", whiteSpace: "nowrap" },
   noMoves: { color: "#666", fontSize: "0.8rem", padding: "0.75rem", textAlign: "center" },
-  guessList: { display: "flex", flexWrap: "wrap", gap: "0.25rem", alignItems: "center" },
+  guessList: { display: "flex", flexWrap: "wrap", gap: "0.25rem", alignItems: "center", justifyContent: "center" },
   guessStep: { display: "flex", alignItems: "center", gap: "0.25rem" },
   guessLabel: { color: "#888", fontSize: "0.8rem", width: "100%", marginBottom: "0.25rem" },
   guessChip: { padding: "0.2rem 0.6rem", borderRadius: "12px", fontSize: "0.8rem", background: "#2a2a2a", color: "#e0e0e0", border: "1px solid #444" },
-  guessChipCurrent: { padding: "0.2rem 0.6rem", borderRadius: "12px", fontSize: "0.8rem", background: "#2a2a2a", color: "#feca57", border: "1px solid #feca57" },
   chainArrow: { color: "#555", fontSize: "0.8rem" },
   revealBtn: { padding: "0.5rem 1rem", borderRadius: "4px", border: "1px solid #444", background: "transparent", color: "#888", cursor: "pointer", fontSize: "0.85rem" },
-  pathActions: { display: "flex", alignItems: "center", gap: "0.75rem" },
+  pathActions: { display: "flex", alignItems: "center", justifyContent: "center", flexWrap: "wrap", gap: "0.5rem 0.75rem" },
+  hintBtn: { padding: "0.3rem 0.75rem", borderRadius: "4px", border: "1px solid #48dbfb", background: "transparent", color: "#48dbfb", cursor: "pointer", fontSize: "0.8rem", fontWeight: 600 },
   stepCount: { color: "#888", fontSize: "0.8rem" },
   undoBtn: { padding: "0.3rem 0.75rem", borderRadius: "4px", border: "1px solid #feca57", background: "transparent", color: "#feca57", cursor: "pointer", fontSize: "0.8rem", fontWeight: 600 },
   revealSection: { display: "flex", flexDirection: "column", alignItems: "center", gap: "0.75rem" },
