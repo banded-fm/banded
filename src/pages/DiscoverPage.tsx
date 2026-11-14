@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+// Spotify's own icon, unaltered (developer.spotify.com/documentation/design: "Icon", green RGB)
+import spotifyIcon from "../assets/spotify-icon-green.svg";
 import { searchCities, getCityEvents, type PollstarCity } from "../api/pollstar";
 import { CityAutocomplete } from "../components/CityAutocomplete";
 import { buildTieredGraphAccess } from "./tieredGraphAccess";
@@ -348,11 +350,26 @@ function ConcertPanel({ concert: c, running, onClose }: { concert: RankedConcert
   return (
     <aside id="concert-panel" className="info-panel" style={panelStyles.panel} aria-label="How this concert fits">
       <div style={panelStyles.header}>
-        {c.scored && c.artistFound ? (
-          <span style={{ ...panelStyles.badge, background: scoreColor(c.score) }}>{c.score}/100</span>
-        ) : (
-          <span style={panelStyles.muted}>{!c.scored ? (running ? "scoring…" : "not scored") : "not in graph"}</span>
-        )}
+        <div style={styles.headerStart}>
+          {c.scored && c.artistFound ? (
+            <span style={{ ...panelStyles.badge, background: scoreColor(c.score) }}>{c.score}/100</span>
+          ) : (
+            <span style={panelStyles.muted}>{!c.scored ? (running ? "scoring…" : "not scored") : "not in graph"}</span>
+          )}
+          {/* Spotify's search for the headliner: Upcoming only has their name (from Pollstar), not a Spotify ID.
+              open.spotify.com links open the app where it's installed, as Spotify's guidelines ask. */}
+          <a
+            href={`https://open.spotify.com/search/${encodeURIComponent(c.artistName)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={styles.spotify}
+            aria-label={`Listen to ${c.artistName} on Spotify`}
+            title="Listen on Spotify"
+          >
+            {/* 22 px (Spotify's minimum is 21), with half its height clear around it inside the 44 px tap target */}
+            <img src={spotifyIcon} alt="" width={22} height={22} />
+          </a>
+        </div>
         <button onClick={onClose} className="info-close" style={panelStyles.close} aria-label="Close panel">
           ×
         </button>
@@ -445,6 +462,8 @@ function formatDate(iso: string): string {
 }
 
 const styles: Record<string, React.CSSProperties> = {
+  headerStart: { display: "flex", alignItems: "center", gap: "0.25rem" },
+  spotify: { display: "flex", alignItems: "center", justifyContent: "center", width: "44px", height: "44px", margin: "-11px 0" },
   page: { flex: 1, display: "flex", overflow: "hidden", position: "relative" },
   container: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "1.5rem", overflowY: "auto", gap: "1.25rem" },
   header: { textAlign: "center" },
