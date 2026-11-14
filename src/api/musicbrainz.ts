@@ -73,6 +73,8 @@ export interface MBRelation {
   ended?: boolean;
   artist?: MBArtist;
   label?: { id: string; name: string };
+  /** A link (with inc=url-rels), e.g. "free streaming" to open.spotify.com. */
+  url?: { resource: string };
   attributes?: string[];
 }
 
@@ -139,6 +141,24 @@ export async function getArtistWithRelations(mbid: string): Promise<MBArtist> {
     return mbFetch<MBArtist>(`/artist/${mbid}`, {
       inc: "artist-rels+label-rels",
     });
+  });
+}
+
+/** An artist's Spotify page among its links (MusicBrainz's "free streaming" relations), or null. */
+export function pickSpotifyArtistUrl(relations: MBRelation[] | undefined): string | null {
+  const urls = (relations ?? [])
+    .filter((r) => r["target-type"] === "url" && r.url?.resource)
+    .sort((a, b) => Number(!!a.ended) - Number(!!b.ended))   // current links first
+    .map((r) => r.url!.resource);
+  return urls.find((u) => /^https?:\/\/open\.spotify\.com\/artist\/[A-Za-z0-9]+\/?$/.test(u)) ?? null;
+}
+
+/** The exact Spotify page MusicBrainz links for this artist, or null (cached a day, like the other lookups). */
+export async function getSpotifyArtistUrl(mbid: string): Promise<string | null> {
+  return cachedFetch(`mb_spotify_${mbid}`, async () => {
+    debugLog.log(`Querying MusicBrainz for links (${mbid})`);
+    const artist = await mbFetch<MBArtist>(`/artist/${mbid}`, { inc: "url-rels" });
+    return pickSpotifyArtistUrl(artist.relations);
   });
 }
 
