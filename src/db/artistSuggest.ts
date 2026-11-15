@@ -3,7 +3,9 @@
  *
  * Suggestions come from the database: the local graph once it has loaded,
  * else Postgres (graph-neighbors' search mode, which never logs misses).
- * MusicBrainz is only a fallback for when the database has no match.
+ * MusicBrainz is asked too when the database has no artist of exactly that
+ * name (ignoring case and accents): its same-name artists go first. So
+ * "Nane" finds Nané even though the graph has Banane and Kyle Kinane.
  * Each suggestion is labelled the way MusicBrainz does it: its disambiguation
  * comment in parentheses, "Fuzz (US garage rock band)", and nothing when
  * MusicBrainz has none (that artist doesn't need telling apart). A graph
@@ -11,6 +13,7 @@
  */
 
 import type { ArtistMatch } from "./graphDb";
+import { foldName } from "./fold";
 import type { MBArtist } from "../api/musicbrainz";
 
 export interface ArtistSuggestion {
@@ -71,30 +74,49 @@ export async function findSuggestions(
   sources: SuggestionSources
 ): Promise<ArtistSuggestion[] | null> {
   const graphHits = local?.slice(0, limit) ?? [];
-  if (graphHits.length > 0 && localHasLabels) return graphHits.map(fromMatch);
+  if (graphHits.length > 0 && localHasLabels && hasExactMatch(query, graphHits)) return graphHits.map(fromMatch);
 
   let db: ArtistMatch[] = [];
   let dbFailed = false;
-  try {
-    db = await sources.searchDb(query, graphHits.length > 0 ? DB_LABEL_LIMIT : limit);
-  } catch {
-    dbFailed = true;
+  if (graphHits.length === 0 || !localHasLabels) {
+    try {
+      db = await sources.searchDb(query, graphHits.length > 0 ? DB_LABEL_LIMIT : limit);
+    } catch {
+      dbFailed = true;
+    }
   }
 
+  let found: ArtistSuggestion[];
   if (graphHits.length > 0) {
     const labels = new Map(db.map((d) => [d.id, d]));
-    return graphHits.map((n) => {
+    found = graphHits.map((n) => {
       const d = labels.get(n.id);
       return fromMatch({ ...n, disambiguation: n.disambiguation ?? d?.disambiguation });
     });
+  } else {
+    found = db.slice(0, limit).map(fromMatch);
   }
-  if (db.length > 0) return db.slice(0, limit).map(fromMatch);
+  // The database has an artist of exactly that name: that's the one being looked for.
+  if (hasExactMatch(query, found) || (graphHits.length > 0 && dbFailed && !localHasLabels)) return found;
 
+  // No exact match: MusicBrainz's artists of that name (accents aside) go first, then the database's.
+  let mb: MBArtist[];
   try {
-    return (await sources.searchMusicBrainz(query)).slice(0, limit).map(fromMusicBrainz);
+    mb = await sources.searchMusicBrainz(query);
   } catch {
-    return dbFailed ? null : [];
+    return found.length > 0 ? found : dbFailed ? null : [];
   }
+  if (found.length === 0) return mb.slice(0, limit).map(fromMusicBrainz);
+  const have = new Set(found.map((f) => f.id));
+  const q = foldName(query.trim());
+  const sameName = mb.filter((a) => !have.has(a.id) && foldName(a.name) === q).map(fromMusicBrainz);
+  return [...sameName, ...found].slice(0, limit);
+}
+
+/** Whether one of these artists has exactly that name, ignoring case and accents. */
+export function hasExactMatch(query: string, matches: Array<{ name: string }>): boolean {
+  const q = foldName(query.trim());
+  return matches.some((m) => foldName(m.name) === q);
 }
 
 /** The parenthetical shown after the name: MusicBrainz's disambiguation, if any. */

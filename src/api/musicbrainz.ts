@@ -12,6 +12,9 @@ import { debugLog } from "../debug/DebugLog";
 import { cachedFetch } from "./cache";
 
 let lastRequestTime = 0;
+/** Retries after a 503 (MusicBrainz's rate limit), and the longest wait before one. */
+const MB_RETRIES = 2;
+const MB_RETRY_MAX_MS = 5000;
 
 async function mbFetch<T>(path: string, params: Record<string, string> = {}): Promise<T> {
   // Respect 1 req/sec rate limit (skipped in tests, where fetch is stubbed)
@@ -34,9 +37,19 @@ async function mbFetch<T>(path: string, params: Record<string, string> = {}): Pr
   // Browsers send their own User-Agent; setting one is a non-safelisted
   // header that forces a CORS preflight, which can fail. fmt=json covers Accept.
   const isBrowser = typeof window !== "undefined";
-  const response = await fetch(url.toString(), isBrowser ? {} : {
+  const get = () => fetch(url.toString(), isBrowser ? {} : {
     headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
   });
+  let response = await get();
+  // 503 is MusicBrainz's "slow down" (its rate limit): wait (Retry-After, up to MB_RETRY_MAX_MS) and try again,
+  // up to MB_RETRIES times.
+  for (let attempt = 1; response.status === 503 && attempt <= MB_RETRIES; attempt++) {
+    const after = Number(response.headers.get("Retry-After")) * 1000;
+    const wait = Math.min(Number.isFinite(after) && after > 0 ? after : 2000 * attempt, MB_RETRY_MAX_MS);
+    if (!isTest) await new Promise((r) => setTimeout(r, wait));
+    lastRequestTime = Date.now();
+    response = await get();
+  }
 
   if (!response.ok) {
     throw new Error(`MusicBrainz API error: ${response.status} ${response.statusText}`);

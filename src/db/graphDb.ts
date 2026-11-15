@@ -1,5 +1,6 @@
 import initSqlJs, { type SqlJsConfig } from "sql.js";
 import { bfsDistances } from "../game/distance";
+import { foldName } from "./fold";
 import { NotTheFile, downloadWithResume } from "./download";
 
 // Use the proper type from our declaration
@@ -85,6 +86,7 @@ export async function getDb(): Promise<DB> {
 
     const instance = new SQL.Database(bytes);
     db = instance as unknown as DB;
+    nameIndex = null;
     return db;
   })();
 
@@ -140,7 +142,52 @@ export function findNodeByName(name: string): NodeRecord | null {
     return row;
   }
   stmt.free();
-  return null;
+  // The same name but for accents ("Bjork" for "Björk")
+  const folded = foldName(name.trim());
+  const idx = getNameIndex();
+  const i = idx ? idx.folded.indexOf(folded) : -1;
+  return i >= 0 ? findNodeById(idx!.ids[i]!) : null;
+}
+
+/**
+ * Every artist's name, folded (foldName), for searches that ignore case and accents: SQLite's LIKE only ignores
+ * the case of A–Z. Built on the first search after the graph loads (one pass over its names).
+ */
+let nameIndex: { ids: string[]; names: string[]; folded: string[] } | null = null;
+function getNameIndex(): typeof nameIndex {
+  if (!db) return null;
+  if (!nameIndex) {
+    const ids: string[] = [], names: string[] = [], folded: string[] = [];
+    const res = db.exec("SELECT id, name FROM nodes WHERE type != 'album'");
+    for (const row of res[0]?.values ?? []) {
+      ids.push(row[0] as string);
+      names.push(row[1] as string);
+      folded.push(foldName(row[1] as string));
+    }
+    nameIndex = { ids, names, folded };
+  }
+  return nameIndex;
+}
+
+/**
+ * Artists whose name contains the query, ignoring case and accents, best first: the name itself, names starting
+ * with it, names with a word starting with it, then the rest; shorter names first.
+ */
+function matchNames(query: string, limit: number): string[] {
+  const q = foldName(query.trim());
+  const idx = getNameIndex();
+  if (!idx || !q) return [];
+  const hits: Array<[number, number]> = [];   // [rank, index]
+  for (let i = 0; i < idx.folded.length; i++) {
+    const f = idx.folded[i]!;
+    const at = f.indexOf(q);
+    if (at < 0) continue;
+    hits.push([f === q ? 0 : at === 0 ? 1 : f.includes(` ${q}`) ? 2 : 3, i]);
+  }
+  hits.sort((a, b) => a[0] - b[0]
+    || idx.names[a[1]]!.length - idx.names[b[1]]!.length
+    || (idx.names[a[1]]! < idx.names[b[1]]! ? -1 : idx.names[a[1]]! > idx.names[b[1]]! ? 1 : 0));
+  return hits.slice(0, limit).map(([, i]) => idx.ids[i]!);
 }
 
 /**
@@ -350,17 +397,7 @@ function getNeighborIds(nodeId: string, allowedRelTypes?: Set<string>): string[]
  * Search nodes by name (partial match).
  */
 export function searchNodes(query: string, limit = 10): NodeRecord[] {
-  if (!db) return [];
-  const results = db.exec(
-    "SELECT id, name, type FROM nodes WHERE name LIKE ? COLLATE NOCASE LIMIT ?",
-    [`%${query}%`, limit]
-  );
-  if (results.length === 0) return [];
-  return results[0]!.values.map((row) => ({
-    id: row[0] as string,
-    name: row[1] as string,
-    type: row[2] as string,
-  }));
+  return searchArtists(query, limit).map(({ id, name, type }) => ({ id, name, type }));
 }
 
 export interface ArtistMatch extends NodeRecord {
@@ -431,32 +468,25 @@ export function getArtistDetails(id: string): ArtistDetails | null {
  * each rank.
  */
 export function searchArtists(query: string, limit = 10): ArtistMatch[] {
-  const q = query.trim();
-  if (!db || !q) return [];
+  if (!db) return [];
+  const ids = matchNames(query, limit);
+  if (ids.length === 0) return [];
   const cols = getDetailColumns();
-  const like = q.replace(/[\\%_]/g, "\\$&");
   const select = [
     "id", "name", "type",
     cols.disambiguation ? "disambiguation" : "NULL",
     cols.area ? "area" : "NULL",
   ].join(", ");
-  const results = db.exec(
-    `SELECT ${select} FROM nodes
-     WHERE type != 'album' AND name LIKE ? ESCAPE '\\'
-     ORDER BY CASE
-       WHEN name = ? COLLATE NOCASE THEN 0
-       WHEN name LIKE ? ESCAPE '\\' THEN 1
-       WHEN name LIKE ? ESCAPE '\\' THEN 2
-       ELSE 3 END, length(name), name
-     LIMIT ?`,
-    [`%${like}%`, q, `${like}%`, `% ${like}%`, limit]
-  );
-  if (results.length === 0) return [];
-  return results[0]!.values.map((row) => ({
-    id: row[0] as string,
-    name: row[1] as string,
-    type: row[2] as string,
-    ...(row[3] ? { disambiguation: row[3] as string } : {}),
-    ...(row[4] ? { area: row[4] as string } : {}),
-  }));
+  const results = db.exec(`SELECT ${select} FROM nodes WHERE id IN (${ids.map(() => "?").join(", ")})`, ids);
+  const byId = new Map((results[0]?.values ?? []).map((row) => [row[0] as string, row] as const));
+  return ids.flatMap((id) => {
+    const row = byId.get(id);
+    return row ? [{
+      id,
+      name: row[1] as string,
+      type: row[2] as string,
+      ...(row[3] ? { disambiguation: row[3] as string } : {}),
+      ...(row[4] ? { area: row[4] as string } : {}),
+    }] : [];
+  });
 }

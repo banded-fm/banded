@@ -99,6 +99,35 @@ describe("findSuggestions", () => {
     expect(await findSuggestions("fuzz", null, false, 8, sources(new Error("down"), [fuzzUK]))).toEqual([fromMusicBrainz(fuzzUK)]);
   });
 
+  it("asks MusicBrainz too when the graph has no artist of exactly that name, and puts its same-name artists first", async () => {
+    const graph = [
+      { id: "banane", name: "Banane", type: "group" },
+      { id: "kinane", name: "Kyle Kinane", type: "person" },
+    ];
+    const nane: MBArtist = { id: "nane-ro", name: "Nane", type: "Person", disambiguation: "Romanian rapper" };
+    const naneTX: MBArtist = { id: "nane-tx", name: "Nané", type: "Group", disambiguation: "Band from Austin, TX" };
+    const other: MBArtist = { id: "nane-cholet", name: "Nane Cholet", type: "Person" };
+    const src = sources([], [nane, naneTX, other]);
+    const found = await findSuggestions("nane", graph, true, 8, src);
+    expect(found!.map((s) => s.id)).toEqual(["nane-ro", "nane-tx", "banane", "kinane"]);
+    expect(found![1]).toEqual(fromMusicBrainz(naneTX));
+    expect(src.searchDb).not.toHaveBeenCalled();
+  });
+
+  it("matches the exact name regardless of accents, so it needs no MusicBrainz then", async () => {
+    const src = sources([], [fuzzUS]);
+    const graph = [{ id: "bjork", name: "Björk", type: "person" }, { id: "brant", name: "Brant Bjork", type: "person" }];
+    expect((await findSuggestions("bjork", graph, true, 8, src))!.map((s) => s.id)).toEqual(["bjork", "brant"]);
+    expect(src.searchMusicBrainz).not.toHaveBeenCalled();
+  });
+
+  it("keeps the database's matches when MusicBrainz can't be reached", async () => {
+    const graph = [{ id: "banane", name: "Banane", type: "group" }];
+    expect(await findSuggestions("nane", graph, true, 8, sources([], new Error("down")))).toEqual([
+      { id: "banane", name: "Banane", type: "group" },
+    ]);
+  });
+
   it("is empty when nothing matches, and null when every source failed", async () => {
     expect(await findSuggestions("zzzz", null, false, 8, sources([], []))).toEqual([]);
     expect(await findSuggestions("zzzz", null, false, 8, sources([], new Error("x")))).toEqual([]);
