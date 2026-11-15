@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+// Spotify's own icon, unaltered (developer.spotify.com/documentation/design: "Icon", green RGB)
+import spotifyIcon from "../assets/spotify-icon-green.svg";
 import { searchCities, getCityEvents, type PollstarCity } from "../api/pollstar";
 import { CityAutocomplete } from "../components/CityAutocomplete";
 import { buildTieredGraphAccess } from "./tieredGraphAccess";
@@ -10,6 +12,7 @@ import type { RankedConcert } from "./concerts";
 import { ArtistAutocomplete } from "../components/ArtistAutocomplete";
 import { addPicked, chipLabel, fromSuggestion, loadLikedArtists, pickedKey, saveLikedArtists, type PickedArtist } from "./pickedArtists";
 import { loadCity, saveCity } from "./savedCity";
+import { getSpotifyArtistUrl } from "../api/musicbrainz";
 
 /** Lets the browser draw (and handle Stop) between scores: each one runs on the main thread. */
 function yieldToBrowser(): Promise<void> {
@@ -345,14 +348,44 @@ function ScoreLabel({ concert: c, running }: { concert: RankedConcert; running: 
  */
 function ConcertPanel({ concert: c, running, onClose }: { concert: RankedConcert; running: boolean; onClose: () => void }) {
   const pairs = [...(c.pairs ?? [])].sort((a, b) => b.score - a.score);
+  // The headliner as the graph matched it (each path ends there; an empty path is the liked artist itself)
+  const viaPath = pairs.find((p) => p.path && p.path.length > 0)?.path;
+  const headlinerId = (viaPath ? viaPath[viaPath.length - 1]!.to.id : undefined)
+    ?? pairs.find((p) => p.path && p.path.length === 0)?.node?.id;
+  // Spotify: the artist's own page when MusicBrainz links it, else Spotify's search for the name
+  const [spotifyPage, setSpotifyPage] = useState<{ id: string; url: string | null } | null>(null);
+  useEffect(() => {
+    if (!headlinerId || spotifyPage?.id === headlinerId) return;
+    let live = true;
+    getSpotifyArtistUrl(headlinerId)
+      .then((url) => { if (live) setSpotifyPage({ id: headlinerId, url }); })
+      .catch(() => { /* the search link stays */ });
+    return () => { live = false; };
+  }, [headlinerId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const spotifyUrl = (spotifyPage?.id === headlinerId ? spotifyPage?.url : null)
+    ?? `https://open.spotify.com/search/${encodeURIComponent(c.artistName)}`;
   return (
     <aside id="concert-panel" className="info-panel" style={panelStyles.panel} aria-label="How this concert fits">
       <div style={panelStyles.header}>
-        {c.scored && c.artistFound ? (
-          <span style={{ ...panelStyles.badge, background: scoreColor(c.score) }}>{c.score}/100</span>
-        ) : (
-          <span style={panelStyles.muted}>{!c.scored ? (running ? "scoring…" : "not scored") : "not in graph"}</span>
-        )}
+        <div style={styles.headerStart}>
+          {c.scored && c.artistFound ? (
+            <span style={{ ...panelStyles.badge, background: scoreColor(c.score) }}>{c.score}/100</span>
+          ) : (
+            <span style={panelStyles.muted}>{!c.scored ? (running ? "scoring…" : "not scored") : "not in graph"}</span>
+          )}
+          {/* open.spotify.com links open the app where it's installed, as Spotify's guidelines ask */}
+          <a
+            href={spotifyUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={styles.spotify}
+            aria-label={`Listen to ${c.artistName} on Spotify`}
+            title="Listen on Spotify"
+          >
+            {/* 22 px (Spotify's minimum is 21), with half its height clear around it inside the 44 px tap target */}
+            <img src={spotifyIcon} alt="" width={22} height={22} />
+          </a>
+        </div>
         <button onClick={onClose} className="info-close" style={panelStyles.close} aria-label="Close panel">
           ×
         </button>
@@ -445,6 +478,8 @@ function formatDate(iso: string): string {
 }
 
 const styles: Record<string, React.CSSProperties> = {
+  headerStart: { display: "flex", alignItems: "center", gap: "0.25rem" },
+  spotify: { display: "flex", alignItems: "center", justifyContent: "center", width: "44px", height: "44px", margin: "-11px 0" },
   page: { flex: 1, display: "flex", overflow: "hidden", position: "relative" },
   container: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "1.5rem", overflowY: "auto", gap: "1.25rem" },
   header: { textAlign: "center" },

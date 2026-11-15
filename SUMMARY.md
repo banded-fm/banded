@@ -219,6 +219,10 @@ Discover (upcoming concert recommendations, streamed: concertSearch.ts streamCon
           localStorage cache). The browser never calls Pollstar; when the function
           can't get the data (Pollstar refusing, nothing cached) the search fails
           ("Pollstar is unavailable right now")
+    Spotify      → the concert panel's header has Spotify's icon (src/assets, unaltered) next to
+                  the score: the headliner's Spotify page when MusicBrainz links it (the graph's
+                  match, from the panel's paths; getSpotifyArtistUrl, inc=url-rels, cached a
+                  day), else Spotify's search for the name
 
 ```
 
