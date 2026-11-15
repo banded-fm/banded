@@ -1,6 +1,6 @@
 import { useState, useEffect, useId, type CSSProperties, type KeyboardEvent } from "react";
 import { getDb, hasDetailColumns, isDbLoaded, searchArtists } from "../db/graphDb";
-import { defaultSources, findSuggestions, suggestionDetail, type ArtistSuggestion } from "../db/artistSuggest";
+import { defaultSources, findSuggestions, hasExactMatch, suggestionDetail, type ArtistSuggestion } from "../db/artistSuggest";
 
 interface Props {
   value: string;
@@ -60,8 +60,8 @@ export function ArtistAutocomplete({
     setActive(-1);
     setStatus("searching");
 
-    // A graph with label columns needs no request, so no debounce either.
-    const needsRequest = !(local && local.length > 0 && localHasLabels);
+    // A graph with label columns and an artist of exactly that name needs no request, so no debounce either.
+    const needsRequest = !(local && local.length > 0 && localHasLabels && hasExactMatch(q, local));
     const timer = setTimeout(() => {
       findSuggestions(q, local, localHasLabels, LIMIT, defaultSources).then((found) => {
         if (cancelled) return;

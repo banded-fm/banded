@@ -235,11 +235,15 @@ src/
 │   │                       Runtime compilation filter (>25 degree albums skipped).
 │   │                       Auto-detects gzip and decompresses if browser didn't.
 │   │                       preloadDb() starts the background download; a failed load can be retried.
-│   │                       searchArtists() ranks name matches for the dropdown (uses the optional
+│   │                       searchArtists() ranks name matches, ignoring case and accents (an
+│   │                       in-memory index of folded names), for the dropdown (uses the optional
 │   │                       disambiguation/area columns when the graph has them).
 │   ├── download.ts       — downloadWithResume: streams a large file, resuming with Range requests
 │   │                       when the connection drops (mobile data); used for graph.db.gz.
 │   ├── artistSuggest.ts  — Artist-dropdown suggestions: graph → Postgres search → MusicBrainz
+│   │                       (MusicBrainz too when nothing has exactly that name, accents aside: its
+│   │                       same-name artists first, so "Nane" finds Nané)
+│   ├── fold.ts           — foldName: lower case without accents/marks (ø→o, ß→ss…), for name matching
 │   │                       fallback (findSuggestions, sources injectable for tests); builds the
 │   │                       "(disambiguation)" label (MusicBrainz's comment only).
 │   └── graphSource.ts    — Async artist lookups: local graph once loaded, else Postgres graph-neighbors
