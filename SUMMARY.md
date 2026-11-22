@@ -120,7 +120,8 @@ Game mode (Six Degrees of Music):
                   🟨 1 away, 🟧 2, 🟥 3+, ❓ hinted, ❌ gave up), steps vs par, the link
                   (game/shareText.ts)
     Distance     → after each step, "N away from <end>" (BFS out from the end to 3 steps, once
-                  per puzzle: game/distance.ts, graphDb.distancesFrom); the guesses' pills
+                  per puzzle, in the background a few ms at a time so the page shows at once:
+                  game/distance.ts bfsDistancesAsync, graphDb.distancesFromAsync; kept for the next visit); the guesses' pills
                   take the same colours as the shared squares
     Hint         → colours the connections at this position by distance (once per position,
                   saved with the game); a step picked from a hinted list shares as ❓ then its square

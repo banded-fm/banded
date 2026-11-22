@@ -1,5 +1,5 @@
 import initSqlJs, { type SqlJsConfig } from "sql.js";
-import { bfsDistances } from "../game/distance";
+import { bfsDistances, bfsDistancesAsync } from "../game/distance";
 import { foldName } from "./fold";
 import { NotTheFile, downloadWithResume } from "./download";
 
@@ -281,6 +281,16 @@ export function getNeighbors(
 export function distancesFrom(id: string, maxDepth: number): Map<string, number> | null {
   if (!db) return null;
   return bfsDistances(id, (n) => getNeighborIds(n), maxDepth);
+}
+
+/**
+ * distancesFrom without holding up the page: worked out a slice at a time between frames
+ * (a far-reaching end artist takes a second or more). Null if the graph hasn't loaded or
+ * `signal` is aborted.
+ */
+export async function distancesFromAsync(id: string, maxDepth: number, signal?: AbortSignal): Promise<Map<string, number> | null> {
+  if (!db) return null;
+  return bfsDistancesAsync(id, (n) => getNeighborIds(n), maxDepth, { signal });
 }
 
 /**
