@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { GAME_ARTISTS, type GameArtist } from "../game/artists";
-import { getDb, isDbLoaded, findNodeByName, bfsShortestPath, findNodeById, distancesFrom } from "../db/graphDb";
+import { getDb, isDbLoaded, findNodeByName, bfsShortestPath, findNodeById, distancesFromAsync } from "../db/graphDb";
 import { AWAY_DEPTH, awayLabel } from "../game/distance";
 import { walkGame, walkKey, type Walk } from "../game/walk";
 import { dailyPuzzle, findPuzzle, localDate, randomPuzzle, type Puzzle } from "../game/puzzles";
@@ -294,6 +294,9 @@ function awayChip(d: number): React.CSSProperties {
   return { padding: "0.2rem 0.6rem", borderRadius: "12px", fontSize: "0.8rem", background: `${c}26`, color: c, border: `1px solid ${c}` };
 }
 
+/** The last puzzle end's distances, kept across visits to Play (the page remounts each time). */
+let lastAway: { endId: string; dist: Map<string, number> } | null = null;
+
 export function PlayPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [state, setState] = useState<GameState>(() => initialState(searchParams));
@@ -346,13 +349,22 @@ export function PlayPage() {
   const current = walk && walk.key === key && !walk.failed ? walk : null;
   const movesFailed = !!walk && walk.key === key && !!walk.failed;
   const visitedIds = new Set(current?.ids ?? []);
-  // How far every artist near the end is from it (worked out once per puzzle, after the page has drawn).
-  const [away, setAway] = useState<{ endId: string; dist: Map<string, number> } | null>(null);
+  // How far every artist near the end is from it: worked out once per puzzle, in the
+  // background a slice at a time (a second or more for a well-connected end), so the
+  // page shows and responds straight away. Kept for the next visit to Play.
+  const [away, setAway] = useState<{ endId: string; dist: Map<string, number> } | null>(
+    () => (lastAway && lastAway.endId === state.endId ? lastAway : null));
   useEffect(() => {
     const endId = state.endId;
     if (!endId || !dbReady || away?.endId === endId) return;
-    const t = setTimeout(() => { const dist = distancesFrom(endId, AWAY_DEPTH); if (dist) setAway({ endId, dist }); }, 0);
-    return () => clearTimeout(t);
+    if (lastAway?.endId === endId) { setAway(lastAway); return; }
+    const ac = new AbortController();
+    distancesFromAsync(endId, AWAY_DEPTH, ac.signal).then((dist) => {
+      if (!dist) return;
+      lastAway = { endId, dist };
+      setAway(lastAway);
+    });
+    return () => ac.abort();
   }, [state.endId, dbReady]); // eslint-disable-line react-hooks/exhaustive-deps
   const awayOf = (id: string) => (away && away.endId === state.endId ? away.dist.get(id) : undefined);
   const awayKnown = !!away && away.endId === state.endId;
