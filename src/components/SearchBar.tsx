@@ -1,26 +1,15 @@
-import { useState, useEffect, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { ArtistAutocomplete } from "./ArtistAutocomplete";
 
 interface Props {
   /** `id` is set when the artist was picked from the dropdown. */
   onSearch: (query: string, id?: string) => void;
   loading: boolean;
-  prefill: string | null;
-  onPrefillConsumed: () => void;
   onReset: () => void;
 }
 
-export function SearchBar({ onSearch, loading, prefill, onPrefillConsumed, onReset }: Props) {
+export function SearchBar({ onSearch, loading, onReset }: Props) {
   const [query, setQuery] = useState("");
-  const [highlightKey, setHighlightKey] = useState(0);
-
-  useEffect(() => {
-    if (prefill) {
-      setQuery(prefill);
-      onPrefillConsumed();
-      setHighlightKey((k) => k + 1);
-    }
-  }, [prefill, onPrefillConsumed]);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -32,8 +21,7 @@ export function SearchBar({ onSearch, loading, prefill, onPrefillConsumed, onRes
 
   return (
     <form onSubmit={handleSubmit} className="search-bar" style={styles.form}>
-      {/* Remounted (key) to replay the highlight when a clicked node fills the box: on the box and its + together. */}
-      <div key={highlightKey} className={`search-group${highlightKey > 0 ? " search-group-highlight" : ""}`} style={styles.searchGroup}>
+      <div className="search-group" style={styles.searchGroup}>
         <ArtistAutocomplete
           value={query}
           onChange={setQuery}
@@ -73,7 +61,7 @@ export function SearchBar({ onSearch, loading, prefill, onPrefillConsumed, onRes
           aria-label={loading ? "Adding connections" : "Add connections"}
           title="Add this artist's connections to the graph"
         >
-          {loading ? "…" : "+"}
+          {loading ? "…" : <>+<span className="search-add-word"> Add</span></>}
         </button>
       </div>
       <button type="button" onClick={onReset} className="search-reset" style={styles.resetBtn} title="Clear graph">
@@ -84,70 +72,73 @@ export function SearchBar({ onSearch, loading, prefill, onPrefillConsumed, onRes
 }
 
 const styles: Record<string, React.CSSProperties> = {
+  // The box (a large name on a 2px rule) with its × and + Add, and Reset as a text link
   form: {
     display: "flex",
-    alignItems: "center",
-    gap: "0.5rem",
-    padding: "0.5rem 0.75rem",
-    borderBottom: "1px solid #2a2a2a",
-    background: "#1a1a1a",
+    alignItems: "flex-end",
+    gap: "0 16px",
+    padding: "20px 48px 12px",
+    background: "#F3ECE1",
     flexWrap: "wrap",
+    flex: "none",
   },
-  // The box and its + button are one control: no gap, shared height.
+  // The box and its buttons are one control: shared height.
   searchGroup: {
     display: "flex",
     alignItems: "stretch",
-    gap: 0,
-    flex: "1 1 250px",
+    gap: "16px",
+    // basis 0 (not 780px) so a narrow window shrinks the box instead of wrapping Reset onto its own line
+    flex: "1 1 0",
+    maxWidth: "780px",
     minWidth: "0",
   },
   inputWrapper: {
     flex: "1 1 0",
+    minWidth: 0,
   },
   input: {
-    padding: "0.5rem 0.75rem",
-    borderRadius: "4px 0 0 4px",
-    border: "1px solid #444",
-    borderRight: "none",
-    background: "#2a2a2a",
-    color: "#e0e0e0",
-    fontSize: "16px",
-    height: "100%",
+    width: "100%",
+    height: "56px",
+    padding: 0,
+    fontSize: "30px",
+    letterSpacing: "-0.03em",
     boxSizing: "border-box",
   },
-  // Inside the box: its background and its top and bottom border, no border of its own between text and ×.
+  // On the box's rule, at its right end
   clear: {
     minWidth: "36px",
-    padding: "0 0.5rem",
-    border: "1px solid #444",
-    borderLeft: "none",
-    borderRight: "none",
-    background: "#2a2a2a",
-    color: "#999",
-    fontSize: "1.3rem",
+    marginLeft: "-17px", // over the 16px gap and 1px more, so the two rules overlap (no seam at fractional widths)
+    padding: "0 0.25rem",
+    border: "none",
+    borderBottom: "2px solid #2E0A14",
+    background: "transparent",
+    color: "#6B4A50",
+    fontSize: "1.6rem",
     lineHeight: 1,
     cursor: "pointer",
   },
   button: {
-    minWidth: "44px",
-    padding: "0 0.75rem",
-    borderRadius: "0 4px 4px 0",
+    minWidth: "56px",
+    height: "56px",
+    padding: "0 28px",
     border: "none",
-    background: "#ff6b6b",
-    color: "#fff",
-    fontWeight: 700,
+    background: "#7A1631",
+    color: "#F3ECE1",
+    fontWeight: 500,
     cursor: "pointer",
-    fontSize: "1.3rem",
-    lineHeight: 1,
+    fontSize: "16px",
+    whiteSpace: "nowrap",
   },
   resetBtn: {
-    padding: "0.5rem 0.75rem",
-    borderRadius: "4px",
-    border: "1px solid #444",
+    height: "56px",
+    padding: "0 4px",
+    border: "none",
     background: "transparent",
-    color: "#888",
-    fontWeight: 600,
+    color: "#2E0A14",
+    fontWeight: 500,
     cursor: "pointer",
-    fontSize: "0.8rem",
+    fontSize: "16px",
+    textDecoration: "underline",
+    textUnderlineOffset: "4px",
   },
 };

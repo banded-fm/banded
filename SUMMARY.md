@@ -6,7 +6,7 @@ A React app that visualizes music scene connections and includes a "Six Degrees 
 
 The site is **Banded** (https://banded.fm); this repo is `banded-fm/banded` (moved from `rahuljaisimha/banded` in November 2026; the old URLs redirect). Its data pipeline is `banded-fm/banded-data`.
 
-The app opens on a **Home** page (no nav bar: a one-line summary and a large button per page). Features (nav order): **Graph** (graph visualization), **Map** (music scenes on a world map), **Proximity** (score how closely an artist fits a set of artists you like, using weighted graph relationships), **Upcoming** (upcoming concert recommendations) and **Play** (Six Degrees game). Upcoming lists upcoming Pollstar concerts at the city's top venues, streamed in as they're found and ranked by headliner similarity. Every artist input (Explore search, Discover/Similarity lists, Play's custom game) has a search-as-you-type dropdown that labels same-name artists with their MusicBrainz disambiguation: "Fuzz (US garage rock band)"; artists MusicBrainz doesn't disambiguate get no label.
+The app opens on a **Home** page (no nav bar: a numbered row per page, the wordmark and a one-line summary). Features (nav order): **Graph** (graph visualization), **Map** (music scenes on a world map), **Proximity** (score how closely an artist fits a set of artists you like, using weighted graph relationships), **Upcoming** (upcoming concert recommendations) and **Play** (Six Degrees game). Upcoming lists upcoming Pollstar concerts at the city's top venues, streamed in as they're found and ranked by headliner similarity. Every artist input (Explore search, Discover/Similarity lists, Play's custom game) has a search-as-you-type dropdown that labels same-name artists with their MusicBrainz disambiguation: "Fuzz (US garage rock band)"; artists MusicBrainz doesn't disambiguate get no label.
 
 ## Tech stack
 
@@ -99,6 +99,11 @@ Explore mode:
         → Graph persists in localStorage across sessions
 
 Game mode (Six Degrees of Music):
+    Start screen → Play opens on the puzzle's start and end (large), its par, and Start game, Random puzzle and
+                  Custom game; the connections stay hidden until Start game, while the moves and distances load behind it
+                  (a game already under way skips it). Start game glides the names and par into the game (a view
+                  transition, .vt-play-*). Today's puzzle shows its date and number (#1 on DAILY_START:
+                  puzzleNumber in puzzles.ts)
     On load → today's puzzle from src/game/puzzles.json (puzzles.ts: day 0 = DAILY_START,
               local date; the list repeats). Shown at once: endpoints and par need no graph,
               and the moves come from the server until it loads (game/walk.ts).
@@ -110,10 +115,11 @@ Game mode (Six Degrees of Music):
         → User navigates by selecting from valid connections list
         → Undo support, no revisiting, game persists 24h in localStorage
     Random Puzzle → another puzzle from the list; Today's Puzzle → back to the daily one
-    Custom game → user picks any two connected artists/bands (no same-type requirement);
+    Custom game → in a bottom sheet (every width; over the start screen or the game), then that puzzle's start
+                  screen; user picks any two connected artists/bands (no same-type requirement);
                   par = shortest path hops over all links (a listed pair keeps its listed par)
     Shared game → URL params (?start=<mbid>&end=<mbid>) load the exact same puzzle;
-                  the share icon (right of the Start/End card; Apple's symbol on Apple devices,
+                  the share icon (a square button after Undo and Hint, under the path; Apple's symbol on Apple devices,
                   Material's three dots elsewhere) opens a share dialog: the puzzle's MBID-based
                   link (avoids name ambiguity), or once won (the dialog opens by itself then) a
                   Wordle-style result: a square per step by how far it was from the end (🟩 the end,
@@ -258,9 +264,10 @@ src/
 │   └── PUZZLES.md        — How the puzzles were chosen: difficulty baseline, fame measure, tests, rules, schedule.
 ├── graph/
 │   ├── types.ts          — Node types, edge types, color maps.
+│   ├── marks.ts          — How each relationship is drawn (colour, width, dash) and the node inks; shared by GraphView and GraphLegend.
 │   └── SceneGraph.ts     — In-memory graph with dedup/merge, persistence, expanded tracking.
 ├── pages/
-│   ├── HomePage.tsx      — Default page (#/), no nav bar: one-line summary + a large button per page (HOME_LINKS). Going to or from it, the title glides into the nav brand while the bar slides down, both in 0.4 s on one linear() spring curve (a quick ~11% wind-up the other way, a sweep, ~10% overshoot), no page fade (view transitions: `viewTransition` links, `view-transition-name` in index.css; off with reduced motion).
+│   ├── HomePage.tsx      — Default page (#/), no nav bar: a numbered row per page (HOME_LINKS), then the wordmark and one-line summary. Going to or from it, the title glides into the nav brand while the bar slides down, both in 0.4 s on one linear() spring curve (a quick ~11% wind-up the other way, a sweep, ~10% overshoot), no page fade (view transitions: `viewTransition` links, `view-transition-name` in index.css; off with reduced motion).
 │   ├── ExplorePage.tsx   — Graph (#/graph): graph exploration via SQLite. Only person/group nodes. Albums filtered out.
 │   ├── PlayPage.tsx      — Six Degrees game: BFS pathfinding, valid moves list with relationship labels,
 │   │                       undo, sorted by rel_type priority, par scoring, reveal shortest path.
@@ -285,11 +292,11 @@ src/
 │   │                       Doesn't wait for the download; returns nothing until the DB has loaded.
 │   ├── tieredGraphAccess.ts — Tiered GraphAccess: core sql.js → Postgres → MusicBrainz.
 │   │                       Async prepareArtists() prefetch + sync build() facade. Used by Similarity + Concerts.
-│   ├── searchResolution.ts — Pure logic: resolve an Explore search by MBID (just-clicked node) or by name.
+│   ├── searchResolution.ts — Pure logic: resolve an Explore search by MBID (the artist last searched or picked) or by name.
 │   └── AboutPage.tsx     — Project info, data source credits, GitHub link.
 │   └── ScenesPage.tsx     — Map (#/map): the scenes from scripts/find_scenes.py on a
 │                            world map (scenes/world-low.svg, -high.svg zoomed in), a dot per city; an open city amid its scattered scenes,
-│                            named and joined to it by lines; era colours grey to green; pan/zoom/pinch; filters (text, city, decades) behind a filter button; ?scene=<id>.
+│                            named and joined to it by lines; era colours rose to maroon; land drawn as dots; pan/zoom/pinch; filters (text, city, decades) behind a filter button; ?scene=<id>.
 ├── components/
 │   ├── ArtistAutocomplete.tsx — Artist input + dropdown (keyboard, ARIA combobox, 44px rows on phones).
 │   │                       Used by SearchBar, Discover, Similarity and Play's custom game.
@@ -297,10 +304,14 @@ src/
 │   ├── SiteFooter.tsx    — One-line footer: the data sources (MusicBrainz, setlist.fm, Pollstar) and that connections and shows may be missing.
 │   │                       Inline tabs on desktop; hamburger menu below 640px.
 │   ├── SearchBar.tsx     — Search input, expand, reset. Responsive layout.
-│   ├── GraphView.tsx     — Force-directed 2D graph canvas (filled=expanded, outline=unexpanded).
-│   │                       Nodes are rounded-rectangle bubbles with the name inside (graph/bubbles.ts sizes and wraps them); a box collision force keeps them apart; links run edge to edge.
-│   ├── GraphLegend.tsx   — Explore legend: per relationship type a checkbox, colour, arrow direction;
-│   │                       node colours. Types and defaults in src/graph/relationships.ts.
+│   ├── SelectMenu.tsx    — A styled pick-one menu (the Map's "Go to a city"): keyboard and type-ahead; a native select on touch screens.
+│   ├── SheetScrim.tsx    — Phones: the dim layer behind every bottom sheet (artist, connection, concert, scene panels and the legend); a tap closes the sheet. Sheets rise in and the scrim fades in (index.css), and slide away when closed.
+│   ├── useLingering.ts   — Keeps a closed bottom sheet on screen for its slide-away (SHEET_CLOSE_MS); phones only unless asked (Play's custom game).
+│   ├── SwissLine.tsx     — The design's zigzag line, drawing itself in on a loop (still with reduced motion); About, Proximity, Upcoming, and three crossing lines (`layered`) on the empty graph.
+│   ├── GraphView.tsx     — Force-directed 2D graph canvas. A person is a filled dot, a group a cluster of three (1.8x a person's width); not yet expanded = dashed outlines.
+│   │                       The name sits under the dot (graph/bubbles.ts wraps it; the box is the collision and pointer area); links run dot to dot, styled by graph/marks.ts.
+│   ├── GraphLegend.tsx   — Explore legend (a +/− toggle top right, level with the search; bottom left on phones; starts closed): per relationship type a checkbox, line mark, arrow direction;
+│   │                       node marks (group, person, not expanded). Types and defaults in src/graph/relationships.ts.
 │   ├── InfoPanel.tsx     — Side panel (desktop) / bottom sheet (mobile) for node details: group/person,
 │   │                       name, MusicBrainz disambiguation, genres (graphDb.getArtistDetails, filled in
 │   │                       once the graph has loaded) and a link to the artist's MusicBrainz page.
@@ -328,7 +339,8 @@ src/
 ├── main.tsx              — Entry point.
 ├── vite-env.d.ts         — Vite type declarations.
 ├── sql.js.d.ts           — sql.js type declarations.
-└── index.css             — Dark theme, mobile styles (max-width: 640px block), highlight animation.
+└── index.css             — Swiss theme (paper #F3ECE1, maroon #7A1631, deep #2E0A14; Space Grotesk from Google Fonts in index.html;
+                            square corners, 2px rules, hard shadows), mobile styles (max-width: 640px block), the animated line.
 
 scripts/
 ├── process_mb_dump.py    — Downloads MusicBrainz dump, builds browser SQLite graph: curated + banded-data
@@ -559,6 +571,8 @@ supabase functions deploy pollstar-city --no-verify-jwt --project-ref lwqkjtzqjg
 Run `migrations/004_artist_search.sql` for fast dropdown search (`graph-neighbors` `?q=` works without it, just slower and with no `area`), and re-run `seed_supabase.py` to fill `area`. Run `migrations/005_collaborations.sql`, then `VACUUM FULL relationships;` on its own, before re-seeding with the collaborations model.
 
 ## What's missing / next steps
+
+- **Proximity: show each row as soon as it's scored**: the breakdown waits for the whole first pass; list each liked artist's row as its search finishes instead (lazy rows), as Upcoming's concerts already do.
 
 - **On-demand MusicBrainz refresh**: Edge function that checks if an artist's relationships are stale (e.g. >30 days) when queried, and fetches latest data from MusicBrainz API to update Supabase. Same pattern as venue-search but for band memberships and collaborations. Handles new records/collaborations appearing over time.
 - **opened_for in Postgres**: seed `opened_for` edges into `relationships` too (graph-neighbors already returns the type).

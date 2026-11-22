@@ -4,10 +4,26 @@
   box-sizing: border-box;
 }
 
+/* Direction B, "Swiss": one grotesque (Space Grotesk, 500; 700 only for emphasis in running text), flat maroon
+   on warm white, square corners, 2px deep rules between sections and 1px tint rules between rows.
+   Palette: paper #F3ECE1, maroon #7A1631 (fields, lines, actions), deep #2E0A14 (text, rules), rose #E8C9C3
+   (tint), muted #6B4A50, rule #D8CBBB. */
+:root {
+  --paper: #F3ECE1;
+  --paper-2: #EBE2D5;
+  --maroon: #7A1631;
+  --deep: #2E0A14;
+  --rose: #E8C9C3;
+  --muted: #6B4A50;
+  --rule: #D8CBBB;
+  --font: "Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  background: #0f0f0f;
-  color: #e0e0e0;
+  font-family: var(--font);
+  font-weight: 500;
+  background: var(--paper);
+  color: var(--deep);
   height: 100dvh;
   overflow: hidden;
   -webkit-text-size-adjust: 100%;
@@ -31,18 +47,62 @@ input {
   touch-action: manipulation;
 }
 
+/* Swiss: everything in the one typeface, square corners (only true circles stay round: .round), no soft shadows */
+/* Controls take the page's type, weight included (browsers otherwise draw buttons at 400) */
+button, input, select, textarea { font-family: inherit; font-weight: inherit; }
+*:not(.round) { border-radius: 0 !important; }
+::selection { background: var(--rose); color: var(--deep); }
+
+/* Scroll bars: thin, a muted thumb on the paper, no arrows (Chrome, Edge, Firefox) */
+* { scrollbar-width: thin; scrollbar-color: var(--muted) transparent; }
+/* Safari, which has no scrollbar-color: the same look through its own pseudo-elements */
+@supports not (scrollbar-color: auto) {
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--muted); border: 3px solid var(--paper); }
+}
+
+/* SelectMenu (the Map's "Go to a city"): the button reads as a field */
+.select-menu-button:hover:not(:disabled), .select-menu-button:focus-visible, .select-menu-button[aria-expanded="true"] { border-bottom-color: var(--maroon) !important; color: var(--maroon) !important; outline: none; }
+.select-menu-button:disabled { color: var(--muted) !important; cursor: default !important; }
+:focus-visible { outline: 2px solid var(--maroon); outline-offset: 2px; }
+
+/* Text inputs: a 2px deep rule underneath, nothing else (the maroon rule when focused) */
+input[type="text"], input[type="search"], input[type="date"], input:not([type]), select {
+  background: transparent !important;
+  border: 0 !important;
+  border-bottom: 2px solid var(--deep) !important;
+  color: var(--deep) !important;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color-scheme: light;
+}
+input[type="text"]:focus, input[type="search"]:focus, input:not([type]):focus, input[type="date"]:focus, select:focus {
+  outline: none;
+  border-bottom-color: var(--maroon) !important;
+}
+input::placeholder { color: var(--muted); opacity: 1; }
+input[type="checkbox"] { accent-color: var(--maroon); }
+
+/* Eyebrows: 12px caps, tracking .1em */
+.eyebrow { font-size: 12px !important; font-weight: 500 !important; letter-spacing: 0.1em; text-transform: uppercase; color: var(--deep); }
+
+/* Page titles: large, tight, maroon */
+.page-title { font-weight: 500 !important; letter-spacing: -0.055em; line-height: 0.95 !important; }
+
 /* Keep content clear of notches / home indicator (viewport-fit=cover) */
 .app-nav {
-  padding-top: max(0.5rem, env(safe-area-inset-top)) !important;
-  padding-left: max(0.75rem, env(safe-area-inset-left)) !important;
-  padding-right: max(0.75rem, env(safe-area-inset-right)) !important;
+  padding-left: max(48px, env(safe-area-inset-left)) !important;
+  padding-right: max(34px, env(safe-area-inset-right)) !important;
 }
+.nav-link:hover { color: var(--maroon) !important; }
+/* The phone menu's numbers and arrows */
+.nav-num, .nav-arrow { display: none; }
 
 /* Play: placeholders while the graph downloads */
 .skeleton {
   display: inline-block;
-  border-radius: 6px;
-  background: linear-gradient(90deg, #242424 0%, #333 50%, #242424 100%);
+  background: linear-gradient(90deg, var(--paper-2) 0%, var(--rule) 50%, var(--paper-2) 100%);
   background-size: 200% 100%;
   animation: skeleton-pulse 1.4s ease-in-out infinite;
 }
@@ -56,9 +116,17 @@ input {
 @media (prefers-reduced-motion: reduce) {
   .skeleton { animation: none; }
 }
+/* Side panels on wide screens: their top rule stops at the page margin on the right and leaves a gap on the left,
+   like the page's other rules; the content lines up with it */
+@media (min-width: 641px) {
+  .info-panel { margin: 0 48px 0 24px; padding-left: 0 !important; padding-right: 0 !important; }
+  /* Graph: the artist panel is a box in the top right, as tall as its content, over the graph rather than beside
+     it; the graph runs the full width and shows below the box */
+  .explore-page .info-panel { position: absolute; top: 0; right: 0; max-height: 100%; z-index: 4; box-shadow: -20px 0 0 var(--paper); } /* a 20px paper margin on its left, like the space below its content; the top rule stays in line with the content */
+}
 /* Similarity breakdown and Discover concert cards open a connection panel (Explore's .info-panel) */
-.pair-card:not([aria-expanded="true"]):hover { border-color: #444 !important; }
-.pair-card:focus-visible { outline: 2px solid #48dbfb; outline-offset: 2px; }
+.pair-card:not([aria-expanded="true"]):hover { border-color: #D8CBBB !important; }
+.pair-card:focus-visible { outline: 2px solid #2E0A14; outline-offset: 2px; }
 
 /* Discover: still searching (next to the status line) */
 .spinner {
@@ -66,12 +134,16 @@ input {
   flex: none;
   width: 16px;
   height: 16px;
-  border: 2px solid #444;
-  border-top-color: #ff6b6b;
-  border-radius: 50%;
+  border: 2px solid var(--rule);
+  border-top-color: var(--maroon);
+  border-radius: 50% !important;
   animation: spin 0.8s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+/* On a maroon button: paper on a faint track */
+.spinner-light { border-color: rgba(243, 236, 225, 0.35); border-top-color: var(--paper); }
+/* Proximity's scores and Upcoming's progress button: scrolled to with a little room above */
+.scroll-target { scroll-margin-top: 16px; }
 @media (prefers-reduced-motion: reduce) {
   .spinner { animation-duration: 2.4s; }
 }
@@ -112,11 +184,21 @@ input {
 /* When the bar swings below its place (overshooting on the way in, winding up
    on the way out), a strip of its own colour fills the gap above it */
 ::view-transition-new(app-nav),
-::view-transition-old(app-nav) { box-shadow: 0 -24px 0 #1a1a1a; }
+::view-transition-old(app-nav) { box-shadow: 0 -24px 0 var(--paper); }
 /* Above the nav bar: going from home, the bar is new, so it would be painted on top */
 ::view-transition-group(site-title) { z-index: 1; }
 ::view-transition-new(app-nav):only-child { animation-name: nav-slide-in; }
 ::view-transition-old(app-nav):only-child { animation-name: nav-slide-out; }
+/* Play, Start game: the start and end names and the par glide (and resize) from the start screen into the game */
+.vt-play-start { view-transition-name: play-start; }
+.vt-play-end { view-transition-name: play-end; }
+.vt-play-par { view-transition-name: play-par; }
+::view-transition-group(play-start),
+::view-transition-group(play-end),
+::view-transition-group(play-par) {
+  animation-duration: 0.5s;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
 @keyframes nav-slide-in { from { transform: translateY(-100%); } }
 @keyframes nav-slide-out { to { transform: translateY(-100%); } }
 @media (prefers-reduced-motion: reduce) {
@@ -126,12 +208,48 @@ input {
   ::view-transition-new(*) { animation: none !important; }
 }
 
+/* Graph legend: + closed, − open; open, a hard shadow; the button inverts on hover */
+.graph-legend summary::-webkit-details-marker { display: none; }
+.graph-legend-sign::before { content: "+"; }
+.graph-legend[open] .graph-legend-sign::before { content: "\2212"; }
+.graph-legend { width: 168px !important; } /* the button keeps its size: the legend opens as a panel of its own */
+/* Desktop: the search stops short of the legend beside it (48px margin + 168px button + 48px gap) */
+@media (min-width: 641px) { .explore-page .search-bar { padding-right: 264px !important; } }
+/* Wide screens (the design): the legend opens as a separate panel below its button, with its own Legend / Hide header */
+@media (min-width: 641px) {
+  .graph-legend-body {
+    position: absolute; top: calc(100% + 18px); right: 4px; width: 364px; box-sizing: border-box;
+    background: var(--paper); border: 2px solid var(--deep); box-shadow: 6px 6px 0 var(--deep);
+    padding: 16px 20px 12px; max-height: calc(100dvh - 240px); overflow-y: auto;
+  }
+  .graph-legend-sheet-head { display: flex !important; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .graph-legend-body .graph-legend-section { padding-left: 0 !important; padding-right: 0 !important; }
+  .graph-legend-body .graph-legend-row { padding: 11px 0 !important; }
+  .graph-legend-body .graph-legend-row input { width: 20px; height: 20px; }
+}
+.graph-legend-button:hover { background: var(--deep); color: var(--paper) !important; }
+.graph-legend-row input { width: 18px; height: 18px; margin: 0; flex: none; }
+/* The bottom sheet's own header (Legend, Hide): phones only */
+.graph-legend-sheet-head { display: none; }
+.graph-legend-hide { min-height: 44px; padding: 0 4px; border: none; background: none; color: var(--maroon); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+
+/* The line: draws itself in, holds, fades, again */
+.swiss-line polyline { stroke-dasharray: 1; stroke-dashoffset: 1; animation: swiss-line-draw 9s cubic-bezier(.45, 0, .25, 1) infinite; }
+@keyframes swiss-line-draw {
+  0% { stroke-dashoffset: 1; opacity: 1; }
+  42% { stroke-dashoffset: 0; opacity: 1; }
+  86% { stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dashoffset: 0; opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .swiss-line polyline { animation: none; stroke-dashoffset: 0; }
+}
+
 /* Footer: the data sources, under every page but About; clear of the home indicator */
 .site-footer { padding-bottom: max(0.3rem, env(safe-area-inset-bottom)) !important; }
 
 /* Home: page buttons */
-.home-card:hover { border-color: #ff6b6b !important; background: #202020 !important; }
-.home-card:focus-visible { outline: 2px solid #48dbfb; outline-offset: 2px; }
+.home-card:hover .home-card-title { color: var(--maroon) !important; }
 
 /* Play: the hint button once used, or before the graph has loaded */
 .page-container button:disabled[title] { opacity: 0.45; cursor: default !important; }
@@ -142,25 +260,85 @@ input {
 }
 
 /* Play: the share dialog's backdrop */
-.share-dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
+.share-dialog::backdrop { background: rgba(46, 10, 20, 0.6); }
 
 /* Play: the share button at the right of the Start/End card */
-.share-btn:hover:not(:disabled) { color: #e0e0e0 !important; background: #2a2a2a !important; }
-.share-btn:focus-visible { outline: 2px solid #48dbfb; outline-offset: -2px; }
+.share-btn:hover:not(:disabled) { color: var(--paper) !important; background: var(--deep) !important; }
+.move-item:hover { color: var(--maroon) !important; }
+/* Connections line up with the edge above them; a hint's colour bar adds its own small inset */
+.moves-list > .move-item:not(.move-hinted) { border-left-width: 0 !important; padding-left: 0 !important; }
+.moves-list > .move-hinted { padding-left: 10px !important; }
+/* Rules only between the connections, not above the first */
+.moves-list > .move-item:first-child { border-top: none !important; }
 .share-btn:disabled { opacity: 0.35; cursor: default !important; }
 
+/* Bottom sheets' dim layer (SheetScrim): phones only */
+.sheet-scrim { display: none; }
 @media (max-width: 640px) {
-  /* Explore legend: 44px tap targets */
+  /*
+   * Every bottom sheet (artist, connection, concert and scene panels, the graph legend) sits over a dim layer that
+   * covers the whole screen, nav bar and footer included, as on the design's Play share sheet. Both sit above the
+   * nav (z-index 200); the sheets are fixed to the bottom of the screen.
+   */
+  .sheet-scrim {
+    display: block; position: fixed; inset: 0; z-index: 205;
+    background: rgba(46, 10, 20, 0.6);
+  }
+  .info-panel, .scene-panel { position: fixed !important; z-index: 210 !important; }
+  /* Every sheet's top edge is one 8px deep band, a border (a border plus a shadow, or a shadow alone, left a hairline
+     of paper through it when the sheet's top fell between pixels, as an 85dvh-high sheet's does). They rise from the
+     bottom as they open, over a fading-in scrim. */
+  .info-panel, .scene-panel, .graph-legend-body {
+    border-top: 8px solid var(--deep) !important;
+    box-shadow: none !important;
+    animation: sheet-up 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .sheet-scrim { animation: scrim-in 0.25s ease-out; }
+  /* Proximity's and Upcoming's sheets (a path from each liked artist) can take most of the screen */
+  #connection-panel, #concert-panel { max-height: 85dvh !important; }
+  /* Graph: the artist sheet's add button, a larger + */
+  .info-panel .info-expand { font-size: 32px !important; font-weight: 400 !important; }
+  /* Intros the size of the other pages' titles on phones (Proximity, Upcoming) */
+  .graph-empty-text { font-size: 56px !important; line-height: 0.86 !important; letter-spacing: -0.065em !important; }
+  /* Play's start screen (Swiss-M-Play-Start): one column, the title in maroon, the ends on a 2px rule */
+  .play-start.page-container { flex-direction: column !important; align-items: stretch !important; justify-content: flex-start !important; gap: 0 !important; padding: 20px 16px 16px !important; }
+  .play-start-title { font-size: 60px !important; line-height: 0.88 !important; letter-spacing: -0.065em !important; color: var(--maroon) !important; }
+  .play-start-ends { margin-top: 20px !important; }
+  .play-start-line { width: 100% !important; height: 40px !important; margin-top: 12px !important; }
+  .play-start-par { font-size: 18px !important; margin-top: 14px !important; }
+  .play-start-row { flex-direction: column !important; align-items: stretch !important; gap: 0 !important; }
+  .play-start-actions { flex: none !important; margin-top: 28px; gap: 12px !important; }
+  .start-game-btn { height: 56px !important; font-size: 17px !important; }
+  .graph-legend[open] { z-index: 210 !important; }
+  .graph-legend-body { z-index: 210 !important; }
+  /* Graph legend: under the search box, level with Reset (16px padding + 52px box + 14px gap), as in the design */
+  .graph-legend { right: auto !important; left: 16px !important; top: 82px !important; bottom: auto !important; }
+  .graph-legend { width: 150px !important; }
+  .graph-legend > summary { height: 40px !important; padding: 0 14px !important; }
+  /* Open, the button stays as it is and the legend rises from the bottom of the screen (the design's sheet) */
+  .graph-legend-body {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
+    background: var(--paper); /* its top band: with the other sheets' (above) */
+    padding: 6px 16px max(8px, env(safe-area-inset-bottom));
+    max-height: 75dvh; overflow-y: auto;
+  }
+  .graph-legend-sheet-head { display: flex; justify-content: space-between; align-items: center; }
+  .graph-legend-body .graph-legend-section { padding-left: 0 !important; padding-right: 0 !important; }
   .graph-legend .graph-legend-row {
     min-height: 44px;
   }
 
-  /* Nav: brand + current tab + hamburger; tabs open as a full-width menu */
+  /* Nav: brand + current page + Menu; the pages open as a full-width list of numbered rows */
   .app-nav {
-    gap: 0.75rem !important;
+    gap: 12px !important;
+    height: auto !important;
+    min-height: 56px;
+    padding-top: env(safe-area-inset-top) !important;
+    padding-left: max(16px, env(safe-area-inset-left)) !important;
+    padding-right: max(12px, env(safe-area-inset-right)) !important;
   }
   .nav-brand {
-    font-size: 1rem !important;
+    font-size: 22px !important;
     white-space: nowrap;
   }
   .nav-current,
@@ -169,6 +347,7 @@ input {
     align-items: center;
     justify-content: center;
   }
+  .nav-toggle { min-height: 44px; }
   .nav-links {
     display: none !important;
     position: absolute;
@@ -177,40 +356,59 @@ input {
     right: 0;
     flex-direction: column;
     gap: 0 !important;
-    padding: 0.25rem 0;
-    background: #1a1a1a;
-    border-bottom: 1px solid #2a2a2a;
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
+    background: var(--paper);
+    border-bottom: 2px solid var(--deep);
+    box-shadow: 0 8px 0 var(--deep);
   }
   .nav-links.open {
     display: flex !important;
   }
   .nav-link {
-    font-size: 1rem !important;
-    padding: 0.85rem max(1rem, env(safe-area-inset-left)) !important;
-    border-radius: 0 !important;
+    gap: 14px;
+    height: 56px;
+    padding: 0 max(16px, env(safe-area-inset-left)) !important;
+    border-top: 1px solid var(--rule);
+    box-shadow: none !important;
   }
+  .nav-link.active { color: var(--maroon) !important; }
+  .nav-num, .nav-arrow { display: inline; }
+  .nav-num { font-size: 12px; letter-spacing: 0.1em; color: var(--maroon); width: 22px; }
+  .nav-label { font-size: 28px; line-height: 1; letter-spacing: -0.045em; }
+  .nav-arrow { margin-left: auto; font-size: 18px; }
 
-  /* Explore toolbar: search, Expand, Reset and settings on one row */
+  /* Graph toolbar (the design): the box and + Add on one row; under them the legend on the left (placed by
+     .graph-legend above) and Reset on the right */
   .search-bar {
-    flex-wrap: nowrap !important;
-    gap: 0.4rem !important;
+    gap: 14px 10px !important;
+    padding: 16px 16px 0 !important;
   }
   .search-group {
-    flex: 1 1 auto !important;
-  }
-  .search-group button,
-  .search-reset {
-    min-height: 44px;
-    padding-left: 0.65rem !important;
-    padding-right: 0.65rem !important;
+    flex: 1 1 100% !important;
+    max-width: none !important;
+    gap: 10px !important;
   }
   .search-group input {
-    min-height: 44px;
+    height: 52px !important;
+    font-size: 22px !important;
   }
+  .search-group button {
+    height: 52px !important;
+    min-height: 44px;
+    padding-left: 18px !important;
+    padding-right: 18px !important;
+  }
+  .search-add { font-size: 15px !important; }
+  .search-reset { height: 44px !important; margin-left: auto; padding: 0 4px !important; color: var(--maroon) !important; font-size: 14px !important; }
   .search-clear {
     min-width: 44px !important;
+    margin-left: -11px !important; /* over the 10px gap and 1px more: no seam between the two rules */
   }
+  .graph-empty { padding: 24px 16px 16px !important; }
+  /* Footer: a size smaller and lighter on phones */
+  .site-footer, .site-footer span { font-size: 11px !important; font-weight: 300 !important; }
+  /* A hairline above the footer, as in the design phone screens */
+  .site-footer { border-top: 1px solid var(--rule); padding-top: 8px !important; }
+  .graph-empty > svg { margin-left: -16px !important; width: calc(100% + 32px) !important; height: 118px; margin-bottom: 48px; }
 
   /* Node details: bottom sheet over the graph */
   .info-panel {
@@ -221,9 +419,6 @@ input {
     width: auto !important;
     max-height: 45%;
     border-left: none !important;
-    border-top: 1px solid #2a2a2a;
-    border-radius: 12px 12px 0 0;
-    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.5);
     z-index: 50;
   }
   .info-close {
@@ -238,62 +433,126 @@ input {
     height: 44px !important;
   }
 
-  /* Home: one full-width button per row */
-  .home-links {
-    grid-template-columns: 1fr !important;
-    gap: 0.75rem !important;
-  }
+  /* Home: the page name over what it does; the wordmark and summary stacked */
   .home-page.page-container {
     padding-bottom: 0 !important; /* the footer ends the page */
   }
   .home-page .site-footer {
-    margin-left: -1rem !important;
-    margin-right: -1rem !important;
+    margin-left: -16px !important;
+    margin-right: -16px !important;
   }
   .home-card {
-    min-height: 88px !important;
-    padding: 1rem !important;
+    flex-wrap: wrap;
+    gap: 4px 14px !important;
+    min-height: 44px;
   }
+  .home-card-title { width: auto !important; font-size: 26px !important; }
+  .home-card-text { flex-basis: 100%; padding-left: 42px; font-size: 13px !important; }
+  /* The wordmark and summary at the top (no nav bar on Home), then the pages; the footer at the foot */
+  .home-foot { order: -1; margin: 0 0 20px !important; padding-top: 0 !important; flex-direction: column; align-items: flex-start !important; gap: 14px !important; }
+  .home-title { font-size: 29vw !important; }
+  .home-summary { font-size: 20px !important; padding-bottom: 0 !important; }
+  .home-page .site-footer { margin-top: auto !important; }
+  /* The footer: one line under the other */
+  .site-footer { flex-direction: column; padding-left: 16px !important; padding-right: 16px !important; }
 
   /* Discover: finger-sized date fields */
   .date-input {
     min-height: 44px;
   }
 
+  /* Proximity / Upcoming: the title over the ruled column; no line */
+  .split { flex-direction: column; justify-content: flex-start !important; gap: 0 !important; }
+  .split-left, .split-right { flex: none !important; width: 100%; }
+  .split .split-title { font-size: 56px !important; }
+  .split-sub { margin-top: 14px !important; font-size: 16px !important; }
+  /* The line goes under the form, full width, as in the design: the left column's blocks join the page's column
+     (display: contents) so the line can be ordered after the right one */
+  .split-left { display: contents !important; }
+  .page-container.split { padding-bottom: 6px !important; }
+  .split-right { order: 1; margin-top: 24px; margin-bottom: 40px; }
+  /* margin-top: auto keeps the line at the foot of the page, just above the footer, however short the form is */
+  .split-line { order: 2; flex: none; margin: auto -16px 0 !important; width: calc(100% + 32px) !important; height: 70px; }
+  .split-line-short { height: 56px; }
+  .split-right input { font-size: 22px !important; height: 52px !important; }
+
+  /* About: the title over the text */
+  .about-page { flex-direction: column; gap: 24px !important; }
+  .about-side { width: auto !important; position: static !important; }
+  .about-page .about-title { font-size: 72px !important; }
+  .about-content h2 { font-size: 32px !important; }
+  .about-content p { font-size: 16px !important; }
+
   /* Scrollable pages (Home / Play / Discover / About) */
   .page-container {
-    padding: 1rem 1rem max(1.5rem, env(safe-area-inset-bottom)) !important;
+    padding: 16px 16px max(24px, env(safe-area-inset-bottom)) !important;
   }
   .page-container input {
     min-width: 0; /* let inputs shrink so their Add buttons stay on screen */
   }
-  .page-title {
-    font-size: 1.35rem !important;
-  }
-  .endpoints-card {
-    width: 100%;
-    padding: 1rem 44px 1rem 1rem !important; /* the share button sits in the right 44 px */
-    gap: 0.5rem !important;
-  }
-  .endpoint-name {
-    font-size: 1.1rem !important;
-    text-align: center;
-  }
+  /* Play: one column; the two columns' blocks in reading order */
+  .play-page { display: flex !important; flex-direction: column; justify-content: flex-start !important; gap: 22px !important; }
+  .play-left, .play-right, .play-bottom { display: contents !important; }
+  .path-actions { order: 3; align-self: stretch; } /* full width, so Undo, Hint and Share sit at the right (the design) */
+  .play-head { order: 1; }
+  .play-error, .endpoints-card { order: 2; }
+  .play-result, .play-progress { order: 3; }
+  .play-moves { order: 4; width: 100%; }
+  .game-buttons { order: 6; width: 100%; }
+  /* Spacing from the design's phone Play screen: the title alone, then the blocks close together */
+  .play-page.page-container { padding-top: 14px !important; gap: 0 !important; }
+  .play-page .play-title { font-size: 34px !important; }
+  .play-head .eyebrow, .play-head p { display: none; }
+  .play-error, .endpoints-card { margin-top: 12px; }
+  .endpoints-card { padding-top: 8px !important; align-self: stretch; }
+  .play-progress, .play-result { margin-top: 14px; }
+  .path-actions { margin-top: 14px; }
+  .play-moves { padding-top: 6px !important; gap: 0 !important; }
+  /* No "Next step from …" label above the connections on phones */
+  .play-moves > .eyebrow { display: none; }
+  .play-moves input { height: 44px !important; font-size: 18px !important; }
+  .play-moves .moves-list { margin-top: 0 !important; }
+  .play-moves .moves-input-row { margin-top: 0 !important; }
+  /* Connection rows (and their loading skeletons): a fixed 36px, the name on one line, a smaller tag */
+  .play-moves .move-item { height: 36px !important; min-height: 0 !important; gap: 10px !important; line-height: 1.15; }
+  .play-moves .move-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .play-moves .move-rel { font-size: 10.5px !important; letter-spacing: 0.06em !important; padding-right: 0 !important; }
+  .play-moves .move-arrow { font-size: 16px !important; padding-right: 8px !important; }
+  .game-buttons { margin-top: 14px; gap: 10px !important; }
+  .game-buttons button { height: 44px !important; }
+  /* Start on the left, Par, End on the right (useFitEndpoints sizes the names) */
+  .endpoints-card { gap: 8px 12px !important; justify-content: space-between; }
+  .endpoint-end { text-align: right; align-items: flex-end; }
+  .endpoints-card .eyebrow { font-size: 11px; }
+  .par-badge { font-size: 18px !important; padding-bottom: 2px !important; }
+  /* Undo, Hint and Share at the right of the steps line */
+  .path-actions { gap: 8px 8px !important; }
+  .path-steps { margin-right: auto; font-size: 15px !important; }
+  .path-actions button { height: 44px !important; padding: 0 12px !important; font-size: 13px !important; }
+  .path-actions .share-btn { width: 44px !important; padding: 0 !important; }
+  .away-from { display: none; }
+  .path-steps { font-size: 14px !important; }
+  .guess-list { gap: 8px 0 !important; }
+  .play-progress { gap: 6px !important; min-height: auto !important; }
+  /* The page scrolls: its blocks keep their full height instead of shrinking to fit (and overlapping) */
+  .play-left > *, .play-right > *, .play-bottom > * { flex-shrink: 0; }
+  /* Paths: the design's smaller phone chips */
+  .play-page .path-chip { height: 32px !important; padding: 0 10px !important; font-size: 13px !important; }
+  .play-page .chain-arrow { padding: 0 5px !important; font-size: 14px !important; }
+  .guess-list { gap: 6px 0 !important; }
   .moves-list {
-    max-height: 45dvh !important;
+    max-height: 34dvh !important;
   }
   .move-item {
-    min-height: 44px;
-    font-size: 0.95rem !important;
-  }
-  .game-buttons {
-    width: 100%;
+    min-height: 52px !important;
+    font-size: 16px !important;
+    padding-left: 12px !important;
   }
   .game-buttons button {
     flex: 1 1 0;
     min-height: 44px;
-    padding-left: 0.5rem !important;
-    padding-right: 0.5rem !important;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
   }
   .chip-remove {
     min-width: 28px;
@@ -316,43 +575,20 @@ input {
   .search-bar .artist-suggestions {
     left: 0.75rem !important;
     right: 0.75rem !important;
-    top: calc(100% - 0.25rem) !important;
+    top: 72px !important; /* under the box (16px padding + 52px), over the legend row */
   }
 }
 
-/* Graph search: the box and its + are one control, so the focus ring and the
-   highlight (a clicked node fills the box) go around both. */
-.search-group {
-  border-radius: 4px;
-}
-.search-group:focus-within {
-  outline: 2px solid #48dbfb;
-  outline-offset: 1px;
-}
-.search-group input:focus,
-.search-group button:focus {
-  outline: none;
-}
-.search-group-highlight {
-  animation: group-highlight-fade 0.8s ease-out forwards;
-}
-.search-group-highlight input,
-.search-group-highlight .search-clear {
-  animation: highlight-fill 0.8s ease-out forwards;
-}
-@keyframes group-highlight-fade {
-  0% { box-shadow: 0 0 0 1px #ff6b6b, 0 0 8px rgba(255, 107, 107, 0.4); }
-  100% { box-shadow: none; }
-}
-@keyframes highlight-fill {
-  0% { background-color: rgba(255, 107, 107, 0.25); }
-  100% { background-color: #2a2a2a; }
-}
+/* Graph search */
+.search-add:disabled { opacity: 0.45; cursor: default !important; }
+.search-reset:hover, .search-clear:hover { color: var(--maroon) !important; }
+/* The × sits on the box's rule: it turns maroon with the box when typing */
+.search-group:focus-within .search-clear { border-bottom-color: var(--maroon) !important; }
 
 /* Scenes (in development): the world map's countries, and the scene panel (a card on the right; a bottom sheet on phones) */
 .scenes-world path {
-  fill: #1e2a33;
-  stroke: #34495a;
+  fill: url(#land-dots);
+  stroke: none;
   stroke-width: 0.6px;
   vector-effect: non-scaling-stroke;
   stroke-linejoin: round;
@@ -394,14 +630,88 @@ input {
     bottom: 0;
     width: auto;
     max-height: 55%;
-    border-radius: 12px 12px 0 0;
+    /* Square, with the other sheets' 8px band along the top only (set with them, above) */
+    border-radius: 0;
+    border-left: none !important;
+    border-right: none !important;
+    border-bottom: none !important;
     padding-bottom: max(1.25rem, env(safe-area-inset-bottom)) !important;
   }
   .scenes-map.city-open .scene-panel {
     top: auto;
     max-height: 55%;
   }
+  /* Its middle about a quarter of the way down the screen (the 56px nav bar above the map) */
+  .scenes-heading {
+    top: calc(25dvh - 56px) !important;
+    transform: translateY(-50%);
+    left: 16px !important;
+    right: 16px;
+    font-size: 56px !important;
+    line-height: 0.86 !important;
+    letter-spacing: -0.065em !important;
+  }
+  .scenes-controls { padding-left: 16px !important; padding-right: 16px !important; }
+  .scenes-map p[style] { left: 16px !important; }
   .scenes-map.has-panel .scenes-zoom {
     bottom: calc(var(--sheet-h, 55%) + 0.75rem); /* just above the sheet, at its measured height */
   }
+}
+
+
+/* Phone bottom sheets rising in (index.css phone block), and their scrim */
+@keyframes sheet-up { from { transform: translateY(100%); } }
+@keyframes scrim-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .info-panel, .scene-panel, .graph-legend-body, .sheet-scrim { animation: none !important; }
+}
+
+/* The narrowest phones: the Map heading a size down, so it stays three lines, clear of the world below it */
+@media (max-width: 360px) {
+  .scenes-heading { font-size: 44px !important; }
+}
+
+/* Play's start screen: with three buttons under Start game, the first (Today's puzzle) takes the full width */
+.play-start-more > button:first-child:nth-last-child(3) { flex-basis: 100% !important; }
+/* Play on phones, in a game: the same for the buttons under it (two to a row, Today's puzzle on its own above them),
+   so their labels stay on one line */
+@media (max-width: 640px) {
+  .game-buttons > button { flex: 1 1 calc(50% - 5px); min-width: 0; padding-left: 10px !important; padding-right: 10px !important; white-space: nowrap; }
+  .game-buttons > button:first-child:nth-last-child(3) { flex-basis: 100%; }
+}
+
+/* Play's custom game: a bottom sheet on every width (on wide screens 560px wide, centred), over a scrim that covers
+   the nav bar too; it rises in like the phone sheets */
+.sheet-scrim.sheet-scrim-all {
+  display: block; position: fixed; inset: 0; z-index: 205;
+  background: rgba(46, 10, 20, 0.6);
+  animation: scrim-in 0.25s ease-out;
+}
+.custom-sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 210;
+  background: var(--paper); border-top: 8px solid var(--deep);
+  padding: 12px 16px max(20px, env(safe-area-inset-bottom));
+  max-height: 85dvh; overflow-y: auto;
+  animation: sheet-up 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@media (min-width: 641px) {
+  .custom-sheet { left: calc(50% - 280px); right: auto; width: 560px; padding: 16px 24px 28px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .custom-sheet, .sheet-scrim.sheet-scrim-all { animation: none; }
+}
+@media (max-width: 640px) {
+  /* The custom game sheet's boxes as small as Play's filter box on phones; gaps to match */
+  .custom-sheet { gap: 14px !important; }
+  .custom-sheet input { height: 44px !important; font-size: 18px !important; }
+}
+
+/* Bottom sheets sliding away as they close (useLingering keeps them a moment; the legend: .legend-closing), their
+   scrims fading out and no longer catching taps */
+@keyframes sheet-down { to { transform: translateY(100%); } }
+@keyframes scrim-out { to { opacity: 0; } }
+.sheet-closing, .legend-closing .graph-legend-body { animation: sheet-down 0.24s cubic-bezier(0.4, 0, 1, 1) forwards !important; }
+.sheet-scrim-closing, .legend-closing .sheet-scrim { animation: scrim-out 0.24s ease-in forwards !important; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) {
+  .sheet-closing, .legend-closing .graph-legend-body, .sheet-scrim-closing, .legend-closing .sheet-scrim { animation: none !important; }
 }

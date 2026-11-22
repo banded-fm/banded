@@ -1,3 +1,5 @@
+import { SwissLine } from "../components/SwissLine";
+
 const MUSICBRAINZ = "https://musicbrainz.org";
 const SETLISTFM = "https://www.setlist.fm";
 const SUPPORT = "support@banded.fm";
@@ -15,9 +17,14 @@ function A({ href, children }: { href: string; children: React.ReactNode }) {
 
 export function AboutPage() {
   return (
-    <div className="page-container" style={styles.container}>
-      <div style={styles.content}>
-        <h1 style={styles.title}>About Banded</h1>
+    <div className="page-container about-page" style={styles.container}>
+      {/* The title on the left; the text on the right, in sections under 2px deep rules */}
+      <div className="about-side" style={styles.side}>
+        <h1 className="page-title about-title" style={styles.title}>About</h1>
+        <div className="eyebrow" style={{ marginTop: "24px" }}>banded.fm</div>
+      </div>
+      <article className="about-content" style={styles.content}>
+        <section style={styles.section}>
         <p style={styles.paragraph}>
           Banded is a graph-powered music discovery tool that maps the relationships between musical
           artists. Instead of recommending music based on a user listening history, it reveals the
@@ -31,6 +38,9 @@ export function AboutPage() {
           recommendation platforms which rely purely on listener counts.
         </p>
 
+        </section>
+        <SwissLine height={60} />
+        <section style={styles.section}>
         <h2 style={styles.heading}>How it works</h2>
         <p style={styles.paragraph}>
           Banded is powered by a precomputed graph database built from <A href={MUSICBRAINZ}>MusicBrainz</A>{" "}
@@ -42,6 +52,8 @@ export function AboutPage() {
           the Map view are found through clusters in the graph using the Louvain method.
         </p>
 
+        </section>
+        <section style={styles.section}>
         <h2 style={styles.heading}>FAQ</h2>
         <h3 style={styles.question}>Why is a musician or connection I know missing?</h3>
         <p style={styles.paragraph}>
@@ -75,9 +87,9 @@ export function AboutPage() {
           large user base.
         </p>
 
-        <h3 style={styles.question}>How does the Proximity Score work?</h3>
+        <h3 style={styles.question}>How does the proximity score work?</h3>
         <p style={styles.paragraph}>
-          The Proximity Score is determined by the closest connection path between two musical artists.
+          The proximity score is determined by the closest connection path between two musical artists.
           Connections are weighted so that band members are the strongest connection, openers,
           supporting musicians and song credits come next, and producers are the weakest.
           Collaborations are worth more for more frequent collaborators. Hub damping applies so artists
@@ -104,17 +116,22 @@ export function AboutPage() {
           <a href={KOFI} target="_blank" rel="noreferrer" style={styles.kofi}>Support Banded on Ko-fi</a>
         </p>
 
+        </section>
+        <section style={styles.section}>
         <h2 style={styles.heading}>Source Code</h2>
         <p style={styles.paragraph}>
           Open-source contributions welcome at{" "}
           <A href="https://github.com/banded-fm/banded">github.com/banded-fm/banded</A>
         </p>
 
+        </section>
+        <section style={styles.section}>
         <h2 style={styles.heading}>Contact</h2>
         <p style={styles.paragraph}>
           <A href={`mailto:${SUPPORT}`}>{SUPPORT}</A>
         </p>
-      </div>
+        </section>
+      </article>
     </div>
   );
 }
@@ -123,55 +140,62 @@ const styles: Record<string, React.CSSProperties> = {
   container: {
     flex: 1,
     overflowY: "auto",
-    padding: "2rem",
+    padding: "38px 48px 64px",
     display: "flex",
-    justifyContent: "center",
+    gap: "52px",
     alignItems: "flex-start", // the content grows past the screen, so the page scrolls to its end (and its bottom padding)
   },
+  side: { width: "400px", flex: "none", position: "sticky", top: 0 },
   content: {
-    maxWidth: "600px",
-    width: "100%",
-    paddingBottom: "3rem", // room after the last section (no footer here)
+    flex: "0 1 812px",
+    minWidth: 0,
+    display: "flex",
+    flexDirection: "column",
+    gap: "40px",
   },
+  section: { borderTop: "2px solid #2E0A14", paddingTop: "14px", display: "flex", flexDirection: "column", gap: "16px" },
   title: {
-    fontSize: "1.6rem",
-    fontWeight: 700,
-    color: "#e0e0e0",
-    marginBottom: "1rem",
+    fontSize: "140px",
+    lineHeight: 0.86,
+    letterSpacing: "-0.07em",
+    color: "#7A1631",
   },
   heading: {
-    fontSize: "1.1rem",
-    fontWeight: 600,
-    color: "#e0e0e0",
-    marginTop: "1.5rem",
-    marginBottom: "0.5rem",
+    fontSize: "48px",
+    fontWeight: 500,
+    lineHeight: 1,
+    letterSpacing: "-0.05em",
+    color: "#2E0A14",
   },
   question: {
-    fontSize: "1rem",
-    fontWeight: 600,
-    color: "#e0e0e0",
-    marginBottom: "0.5rem",
+    marginTop: "12px",
+    fontSize: "22px",
+    fontWeight: 500,
+    lineHeight: 1.25,
+    letterSpacing: "-0.025em",
+    color: "#2E0A14",
   },
   paragraph: {
-    color: "#aaa",
-    fontSize: "0.9rem",
-    lineHeight: 1.6,
-    marginBottom: "0.75rem",
+    color: "#2E0A14",
+    fontSize: "18px",
+    fontWeight: 400,
+    lineHeight: 1.5,
   },
-  // A plain link styled as a button in Ko-fi's blue: no Ko-fi script or embed on the page.
+  // A plain link styled as the primary button: no Ko-fi script or embed on the page.
   kofi: {
     display: "inline-flex",
     alignItems: "center",
-    minHeight: "44px",
-    padding: "0 1.1rem",
-    borderRadius: "999px",
-    background: "#00b9fe",
-    color: "#fff",
-    fontWeight: 600,
+    minHeight: "48px",
+    padding: "0 28px",
+    background: "#7A1631",
+    color: "#F3ECE1",
+    fontWeight: 500,
+    fontSize: "15px",
     textDecoration: "none",
   },
   link: {
-    color: "#48dbfb",
-    textDecoration: "none",
+    color: "#7A1631",
+    textDecoration: "underline",
+    textUnderlineOffset: "3px",
   },
 };

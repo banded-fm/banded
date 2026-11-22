@@ -68,8 +68,8 @@ function formatTime(ts: number): string {
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
-    borderBottom: "1px solid #2a2a2a",
-    background: "#111",
+    borderBottom: "1px solid #D8CBBB",
+    background: "#F3ECE1",
     fontFamily: "monospace",
     fontSize: "0.75rem",
   },
@@ -83,21 +83,21 @@ const styles: Record<string, React.CSSProperties> = {
   toggleBtn: {
     background: "none",
     border: "none",
-    color: "#888",
+    color: "#6B4A50",
     cursor: "pointer",
     fontSize: "0.8rem",
     padding: "0 0.25rem",
   },
   singleLine: {
-    color: "#aaa",
+    color: "#6B4A50",
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
     flex: 1,
   },
   badge: {
-    background: "#333",
-    color: "#888",
+    background: "#EBE2D5",
+    color: "#6B4A50",
     borderRadius: "8px",
     padding: "0 6px",
     fontSize: "0.65rem",
@@ -109,14 +109,14 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "0 0.75rem 0.4rem",
   },
   logLine: {
-    color: "#aaa",
+    color: "#6B4A50",
     padding: "1px 0",
     whiteSpace: "nowrap",
     overflow: "hidden",
     textOverflow: "ellipsis",
   },
   timestamp: {
-    color: "#555",
+    color: "#6B4A50",
     marginRight: "0.5rem",
   },
 };

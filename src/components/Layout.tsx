@@ -40,9 +40,9 @@ export function Layout() {
   return (
     <>
       <nav className="app-nav" style={styles.nav}>
-        <Link to="/" viewTransition className="nav-brand" style={styles.brand} aria-label="Banded home">Banded</Link>
-        {/* Mobile only (see index.css): current tab + hamburger toggle */}
-        {current && <span className="nav-current" style={styles.current}>{current.label}</span>}
+        <Link to="/" viewTransition className="nav-brand" style={styles.brand} aria-label="Banded home">banded.fm</Link>
+        {/* Mobile only (see index.css): current page + the Menu button */}
+        {current && <span className="nav-current eyebrow" style={styles.current}>{current.label}</span>}
         <button
           type="button"
           className="nav-toggle"
@@ -52,17 +52,25 @@ export function Layout() {
           aria-expanded={menuOpen}
           aria-controls="nav-links"
         >
-          {menuOpen ? "✕" : "☰"}
+          <svg width="16" height="12" viewBox="0 0 16 12" aria-hidden="true">
+            {menuOpen
+              ? <path d="M2 0L14 12M14 0L2 12" stroke="currentColor" strokeWidth="2" />
+              : <path d="M0 1h16M0 6h16M0 11h16" stroke="currentColor" strokeWidth="2" />}
+          </svg>
+          {menuOpen ? "Close" : "Menu"}
         </button>
         <div id="nav-links" className={`nav-links${menuOpen ? " open" : ""}`} style={styles.links}>
-          {NAV_ITEMS.map((item) => (
+          {NAV_ITEMS.map((item, i) => (
             <NavLink
               key={item.to}
-              className="nav-link"
+              className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
               to={item.to}
               style={({ isActive }) => ({ ...styles.link, ...(isActive ? styles.activeLink : {}) })}
             >
-              {item.label}
+              {/* The number and the arrow (or dot, for this page) show in the phone menu only */}
+              <span className="nav-num" aria-hidden="true">{String(i + 1).padStart(2, "0")}</span>
+              <span className="nav-label">{item.label}</span>
+              <span className="nav-arrow" aria-hidden="true">{location.pathname === item.to ? "●" : "→"}</span>
             </NavLink>
           ))}
         </div>
@@ -77,62 +85,64 @@ export function Layout() {
 
 const styles: Record<string, React.CSSProperties> = {
   main: { display: "contents" },
+  // The bar: the brand on the left, the pages on the right, a 2px deep rule under it
   nav: {
     display: "flex",
     alignItems: "center",
     gap: "1rem",
-    padding: "0.5rem 0.75rem",
-    background: "#1a1a1a",
-    borderBottom: "1px solid #2a2a2a",
+    height: "64px",
+    padding: "0 34px 0 48px",
+    background: "#F3ECE1",
+    borderBottom: "2px solid #2E0A14",
     position: "relative",
     zIndex: 200,
+    flex: "none",
   },
   brand: {
-    fontWeight: 700,
-    fontSize: "1.1rem",
-    color: "#ff6b6b",
+    fontWeight: 500,
+    fontSize: "24px",
+    letterSpacing: "-0.04em",
+    color: "#7A1631",
     marginRight: "auto",
     textDecoration: "none",
   },
   current: {
     display: "none",
-    color: "#e0e0e0",
-    fontSize: "0.9rem",
-    fontWeight: 500,
+    color: "#7A1631",
   },
   toggle: {
     display: "none",
-    background: "none",
-    border: "none",
-    color: "#e0e0e0",
-    fontSize: "1.3rem",
-    lineHeight: 1,
+    gap: "8px",
+    height: "40px",
+    padding: "0 12px",
+    background: "#F3ECE1",
+    border: "2px solid #2E0A14",
+    color: "#2E0A14",
+    fontSize: "14px",
+    fontWeight: 500,
     cursor: "pointer",
-    minWidth: "44px",
-    minHeight: "44px",
-    margin: "-0.5rem -0.5rem -0.5rem 0",
   },
   links: {
     display: "flex",
-    gap: "0.75rem",
+    gap: "2px",
+    alignSelf: "stretch",
   },
   link: {
-    color: "#888",
+    display: "inline-flex",
+    alignItems: "center",
+    color: "#2E0A14",
     textDecoration: "none",
-    fontSize: "0.9rem",
+    fontSize: "15px",
     fontWeight: 500,
-    padding: "0.25rem 0.5rem",
-    borderRadius: "4px",
-    transition: "color 0.2s",
+    padding: "0 14px",
   },
   activeLink: {
-    color: "#e0e0e0",
-    background: "#2a2a2a",
+    boxShadow: "inset 0 -4px 0 #7A1631",
   },
   backdrop: {
     position: "fixed",
     inset: 0,
-    background: "rgba(0, 0, 0, 0.5)",
+    background: "rgba(46, 10, 20, 0.6)",
     zIndex: 150,
   },
 };

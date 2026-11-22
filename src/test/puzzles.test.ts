@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DAILY_START, PUZZLES, dailyPuzzle, dayNumber, findPuzzle, localDate } from "../game/puzzles";
+import { DAILY_START, PUZZLES, dailyPuzzle, dayNumber, findPuzzle, localDate, puzzleNumber } from "../game/puzzles";
 
 describe("daily puzzles", () => {
   it("lists about three years of puzzles, each a 3-5 hop connection whose path matches its par", () => {
@@ -31,5 +31,12 @@ describe("daily puzzles", () => {
     expect(findPuzzle(p.start.id, p.end.id)).toBe(p);
     expect(findPuzzle(p.end.id, p.start.id)).toBe(p);
     expect(findPuzzle("x", "y")).toBeUndefined();
+  });
+});
+
+describe("puzzleNumber", () => {
+  it("numbers the daily puzzles from #1 on the first day", () => {
+    expect(puzzleNumber(DAILY_START)).toBe(1);
+    expect(puzzleNumber("2026-11-28")).toBe(23);
   });
 });

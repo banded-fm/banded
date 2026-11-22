@@ -1,3 +1,6 @@
+import { SwissLine } from "../components/SwissLine";
+import { useLingering } from "../components/useLingering";
+import { SheetScrim } from "../components/SheetScrim";
 import { useEffect, useRef, useState } from "react";
 // Spotify's own icon, unaltered (developer.spotify.com/documentation/design: "Icon", green RGB)
 import spotifyIcon from "../assets/spotify-icon-green.svg";
@@ -39,6 +42,8 @@ export function DiscoverPage() {
   // The concert whose panel is open (by id, so it follows the concert as it's scored and re-sorted)
   const [openId, setOpenId] = useState<string | null>(null);
   const openConcert = openId ? (concerts?.find((c) => c.id === openId) ?? null) : null;
+  // The concert's sheet stays a moment after closing, to slide away (phones)
+  const [sheetConcert, sheetClosing] = useLingering(openConcert);
 
   // Escape closes the panel.
   useEffect(() => {
@@ -167,19 +172,34 @@ export function DiscoverPage() {
     setProgress((p) => (p ? { ...p, stage: "stopped" } : p));
   };
 
+  // Once a search's first concerts are in, scroll down to them, with the progress button (Stop · n%) at the top of
+  // the screen above them. Once per search.
+  const stopRef = useRef<HTMLButtonElement>(null);
+  const scrolledFor = useRef<unknown>(null);
+  const found = concerts?.length ?? 0;
+  useEffect(() => {
+    if (!running || found === 0 || scrolledFor.current === progress?.city) return;
+    scrolledFor.current = progress?.city;
+    stopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [running, found]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!running) scrolledFor.current = null; }, [running]);
+
   return (
     <div style={styles.page}>
-      <div className="page-container" style={styles.container}>
-        <div style={styles.header}>
-          <h1 className="page-title" style={styles.title}>Upcoming Concerts</h1>
-          <p style={styles.subtitle}>
+      <div className="page-container split" style={styles.container}>
+        {/* The title on the left (the line under it); the fields and concerts in a ruled column on the right */}
+        <div className="split-left" style={styles.header}>
+          <h1 className="page-title split-title" style={styles.title}>Upcoming concerts</h1>
+          <p className="split-sub" style={styles.subtitle}>
             Find upcoming concerts in a city, ranked by how well the artist fits your taste.
           </p>
+          <SwissLine className="split-line split-line-short" height={150} phoneSegmentWidth={65} bleed="phone" style={{ marginTop: "72px", marginLeft: "-48px", width: "calc(100% + 48px)" }} />
         </div>
 
+        <div className="split-right" style={styles.column}>
         <div style={styles.form}>
           <div style={styles.field}>
-            <label style={styles.label}>City</label>
+            <label className="eyebrow" style={styles.label}>City</label>
             <CityAutocomplete
               value={city}
               onChange={(v) => {
@@ -199,7 +219,7 @@ export function DiscoverPage() {
 
           <div style={styles.dates}>
             <label style={{ ...styles.field, ...styles.dateField }}>
-              <span style={styles.label}>From</span>
+              <span className="eyebrow" style={styles.label}>From</span>
               <input
                 type="date"
                 value={range.from}
@@ -216,7 +236,7 @@ export function DiscoverPage() {
               />
             </label>
             <label style={{ ...styles.field, ...styles.dateField }}>
-              <span style={styles.label}>To</span>
+              <span className="eyebrow" style={styles.label}>To</span>
               <input
                 type="date"
                 value={range.to}
@@ -231,20 +251,20 @@ export function DiscoverPage() {
           </div>
 
           <div style={styles.field}>
-            <label style={styles.label}>Artists you like</label>
+            <label className="eyebrow" style={styles.label}>Artists you like</label>
             <div style={styles.inputRow}>
               <ArtistAutocomplete
                 value={artistInput}
                 onChange={setArtistInput}
                 onSelect={(a) => addArtist(fromSuggestion(a))}
                 onEnter={handleAddArtist}
-                placeholder="Add an artist..."
+                placeholder="Add an artist"
                 inputStyle={styles.input}
                 wrapperStyle={styles.autocomplete}
                 ariaLabel="Add an artist"
               />
               <button type="button" onClick={handleAddArtist} disabled={!artistInput.trim()} style={styles.addBtn}>
-                Add
+                + Add
               </button>
             </div>
             {artists.length > 0 && (
@@ -271,8 +291,9 @@ export function DiscoverPage() {
             // The button is the progress bar while the search runs
             <button
               type="button"
+              ref={stopRef}
               onClick={handleStop}
-              className="discover-stop"
+              className="discover-stop scroll-target"
               style={styles.stopBtn}
               aria-label={`Stop (${done}% done)`}
             >
@@ -286,7 +307,7 @@ export function DiscoverPage() {
               disabled={!city.trim() || artists.length === 0}
               style={styles.searchBtn}
             >
-              Find Concerts
+              Find concerts
             </button>
           )}
         </div>
@@ -303,12 +324,12 @@ export function DiscoverPage() {
               Concerts in {progress?.city ?? searchedCity} ({concerts.length})
               <span style={styles.resultsDates}>{rangeLabel}</span>
             </h2>
-            {concerts.map((c) => (
+            {concerts.map((c, i) => (
               <button
                 key={c.id}
                 type="button"
                 className="pair-card"
-                style={{ ...styles.card, ...styles.cardButton, ...(openId === c.id ? styles.cardSelected : {}) }}
+                style={{ ...styles.card, ...styles.cardButton, ...(i === 0 ? styles.firstCard : {}) }}
                 onClick={() => setOpenId(c.id)}
                 aria-expanded={openId === c.id}
                 aria-controls="concert-panel"
@@ -328,8 +349,10 @@ export function DiscoverPage() {
             ))}
           </div>
         )}
+        </div>
       </div>
-      {openConcert && <ConcertPanel concert={openConcert} running={running} onClose={() => setOpenId(null)} />}
+      {sheetConcert && <SheetScrim closing={sheetClosing} onClose={() => setOpenId(null)} />}
+      {sheetConcert && <ConcertPanel concert={sheetConcert} running={running} closing={sheetClosing} onClose={() => setOpenId(null)} />}
     </div>
   );
 }
@@ -346,7 +369,7 @@ function ScoreLabel({ concert: c, running }: { concert: RankedConcert; running: 
  * from each, best first. Explore's node panel (.info-panel): a sidebar on
  * desktop, a bottom sheet on phones, like the Similarity page's.
  */
-function ConcertPanel({ concert: c, running, onClose }: { concert: RankedConcert; running: boolean; onClose: () => void }) {
+function ConcertPanel({ concert: c, running, onClose, closing = false }: { concert: RankedConcert; running: boolean; onClose: () => void; closing?: boolean }) {
   const pairs = [...(c.pairs ?? [])].sort((a, b) => b.score - a.score);
   // The headliner as the graph matched it (each path ends there; an empty path is the liked artist itself)
   const viaPath = pairs.find((p) => p.path && p.path.length > 0)?.path;
@@ -365,7 +388,7 @@ function ConcertPanel({ concert: c, running, onClose }: { concert: RankedConcert
   const spotifyUrl = (spotifyPage?.id === headlinerId ? spotifyPage?.url : null)
     ?? `https://open.spotify.com/search/${encodeURIComponent(c.artistName)}`;
   return (
-    <aside id="concert-panel" className="info-panel" style={panelStyles.panel} aria-label="How this concert fits">
+    <aside id="concert-panel" className={`info-panel${closing ? " sheet-closing" : ""}`} style={panelStyles.panel} aria-label="How this concert fits">
       <div style={panelStyles.header}>
         <div style={styles.headerStart}>
           {c.scored && c.artistFound ? (
@@ -481,40 +504,45 @@ const styles: Record<string, React.CSSProperties> = {
   headerStart: { display: "flex", alignItems: "center", gap: "0.25rem" },
   spotify: { display: "flex", alignItems: "center", justifyContent: "center", width: "44px", height: "44px", margin: "-11px 0" },
   page: { flex: 1, display: "flex", overflow: "hidden", position: "relative" },
-  container: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "1.5rem", overflowY: "auto", gap: "1.25rem" },
-  header: { textAlign: "center" },
-  title: { fontSize: "1.6rem", fontWeight: 700, color: "#e0e0e0", marginBottom: "0.25rem" },
-  subtitle: { color: "#888", fontSize: "0.9rem" },
-  form: { display: "flex", flexDirection: "column", gap: "1rem", width: "100%", maxWidth: "450px" },
-  field: { display: "flex", flexDirection: "column", gap: "0.4rem" },
-  label: { fontSize: "0.8rem", fontWeight: 600, color: "#aaa", textTransform: "uppercase", letterSpacing: "0.03em" },
-  input: { padding: "0.5rem 0.75rem", borderRadius: "4px", border: "1px solid #444", background: "#2a2a2a", color: "#e0e0e0", fontSize: "16px" },
-  inputRow: { display: "flex", gap: "0.5rem" },
-  dates: { display: "flex", flexWrap: "wrap", gap: "0.75rem" },
+  container: { flex: 1, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "48px", padding: "38px 48px 48px", overflowY: "auto" },
+  header: { flex: "0 1 660px", minWidth: 0 },
+  title: { fontSize: "clamp(56px, 8.8vw, 120px)", lineHeight: 0.86, letterSpacing: "-0.065em", color: "#7A1631" },
+  subtitle: { color: "#2E0A14", fontSize: "18px", fontWeight: 400, lineHeight: 1.45, marginTop: "28px", maxWidth: "440px" },
+  column: { flex: "0 1 512px", minWidth: 0, display: "flex", flexDirection: "column", gap: "24px" },
+  form: { display: "flex", flexDirection: "column", gap: "28px", width: "100%", borderTop: "2px solid #2E0A14", paddingTop: "14px" },
+  field: { display: "flex", flexDirection: "column", gap: "6px" },
+  label: {},
+  input: { width: "100%", height: "56px", padding: 0, fontSize: "26px", letterSpacing: "-0.03em" },
+  inputRow: { display: "flex", alignItems: "flex-end", gap: "12px" },
+  dates: { display: "flex", flexWrap: "wrap", gap: "24px" },
   dateField: { flex: "1 1 140px", minWidth: 0 },
-  // The page's font, and a light calendar icon on the dark field
-  dateInput: { fontFamily: "inherit", colorScheme: "dark" },
-  resultsDates: { display: "block", fontSize: "0.8rem", fontWeight: 400, color: "#888", marginTop: "0.15rem" },
-  autocomplete: { flex: 1 },
-  addBtn: { padding: "0.5rem 1rem", borderRadius: "4px", border: "none", background: "#48dbfb", color: "#000", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
-  chipList: { display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.25rem" },
-  chip: { display: "flex", alignItems: "center", gap: "0.3rem", padding: "0.2rem 0.6rem", borderRadius: "12px", background: "#2a2a2a", color: "#e0e0e0", fontSize: "0.8rem", border: "1px solid #444" },
-  chipRemove: { background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: "1rem", lineHeight: 1, padding: 0 },
-  searchBtn: { padding: "0.6rem 1.25rem", minHeight: "44px", borderRadius: "4px", border: "none", background: "#ff6b6b", color: "#fff", fontWeight: 600, cursor: "pointer", fontSize: "0.9rem" },
-  stopBtn: { position: "relative", overflow: "hidden", padding: "0.6rem 1.25rem", minHeight: "44px", borderRadius: "4px", border: "1px solid #ff6b6b", background: "transparent", color: "#fff", fontWeight: 600, cursor: "pointer", fontSize: "0.9rem" },
-  progressFill: { position: "absolute", inset: "0 auto 0 0", background: "rgba(255, 107, 107, 0.55)", transition: "width 0.3s ease-out" },
+  dateInput: { fontSize: "22px" },
+  resultsDates: { display: "block", fontSize: "14px", fontWeight: 400, letterSpacing: 0, textTransform: "none", color: "#6B4A50", marginTop: "4px" },
+  autocomplete: { flex: 1, minWidth: 0 },
+  addBtn: { flex: "none", height: "56px", padding: "0 28px", border: "none", background: "#7A1631", color: "#F3ECE1", fontWeight: 500, fontSize: "16px", cursor: "pointer", whiteSpace: "nowrap" },
+  chipList: { display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "10px" },
+  chip: { display: "flex", alignItems: "center", gap: "6px", height: "36px", padding: "0 6px 0 14px", border: "2px solid #2E0A14", color: "#2E0A14", fontSize: "15px", letterSpacing: "-0.01em" },
+  chipRemove: { background: "none", border: "none", color: "#2E0A14", cursor: "pointer", fontSize: "18px", lineHeight: 1, padding: "0 4px" },
+  searchBtn: { height: "60px", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 24px", border: "none", background: "#7A1631", color: "#F3ECE1", fontWeight: 500, fontSize: "18px", letterSpacing: "-0.01em", cursor: "pointer", textAlign: "left" },
+  // While it runs: the button fills with rose as the search goes
+  stopBtn: { position: "relative", overflow: "hidden", height: "60px", padding: "0 24px", border: "2px solid #7A1631", background: "transparent", color: "#2E0A14", fontWeight: 500, fontSize: "18px", cursor: "pointer", textAlign: "left" },
+  progressFill: { position: "absolute", inset: "0 auto 0 0", background: "#E8C9C3", transition: "width 0.3s ease-out" },
   progressLabel: { position: "relative" },
-  error: { color: "#ff6b6b", fontSize: "0.85rem" },
-  status: { display: "flex", alignItems: "center", gap: "0.6rem", color: "#aaa", fontSize: "0.85rem", width: "100%", maxWidth: "450px" },
-  results: { width: "100%", maxWidth: "450px" },
-  resultsTitle: { fontSize: "1.1rem", fontWeight: 600, color: "#e0e0e0", marginBottom: "0.75rem" },
-  card: { background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: "6px", padding: "0.75rem", marginBottom: "0.5rem" },
-  cardButton: { display: "flex", flexDirection: "column", gap: "0.3rem", width: "100%", textAlign: "left", font: "inherit", color: "inherit", cursor: "pointer", minHeight: "44px" },
-  cardSelected: { border: "1px solid #48dbfb" },
-  support: { fontSize: "0.8rem", color: "#ccc" },
-  cardHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem" },
-  cardName: { fontWeight: 600, color: "#e0e0e0", fontSize: "0.95rem", minWidth: 0, overflowWrap: "anywhere" },
-  match: { fontSize: "0.8rem", fontWeight: 600, whiteSpace: "nowrap" },
-  notFound: { fontSize: "0.72rem", color: "#636e72", fontStyle: "italic", whiteSpace: "nowrap" },
-  concertMeta: { fontSize: "0.8rem", color: "#888" },
+  error: { color: "#7A1631", fontSize: "15px" },
+  status: { display: "flex", alignItems: "center", gap: "10px", color: "#2E0A14", fontSize: "14px", fontWeight: 400, width: "100%" },
+  results: { width: "100%" },
+  resultsTitle: { fontSize: "12px", fontWeight: 500, letterSpacing: "0.1em", textTransform: "uppercase", color: "#2E0A14", borderTop: "2px solid #2E0A14", paddingTop: "12px", marginBottom: "8px" },
+  // A row per concert: 1px tint rules, a maroon edge; the open one is marked deep
+  // A plain ruled row, as on Proximity: no edge colour, nothing marking a concert already opened (border: none first,
+  // or a button's default border shows as a grey line down the left)
+  card: { border: "none", borderTop: "1px solid #D8CBBB", padding: "10px 0", background: "transparent" },
+  // Rules only between rows: none above the first
+  firstCard: { borderTop: "none" },
+  cardButton: { display: "flex", flexDirection: "column", gap: "4px", width: "100%", textAlign: "left", font: "inherit", color: "inherit", cursor: "pointer", minHeight: "44px", borderRight: "none", borderBottom: "none" },
+  support: { fontSize: "13px", fontWeight: 400, color: "#2E0A14" },
+  cardHeader: { display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "10px" },
+  cardName: { fontWeight: 500, color: "#2E0A14", fontSize: "20px", letterSpacing: "-0.02em", minWidth: 0, overflowWrap: "anywhere" },
+  match: { fontSize: "15px", fontWeight: 500, whiteSpace: "nowrap" },
+  notFound: { fontSize: "12px", letterSpacing: "0.1em", textTransform: "uppercase", color: "#6B4A50", whiteSpace: "nowrap" },
+  concertMeta: { fontSize: "13px", fontWeight: 400, color: "#6B4A50" },
 };

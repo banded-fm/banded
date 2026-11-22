@@ -113,26 +113,27 @@ export interface ForceGraphData {
 // --- Color map for node types ---
 
 export const NODE_COLORS: Record<NodeType, string> = {
-  artist: "#ff6b6b",
-  musician: "#feca57",
-  venue: "#48dbfb",
-  city: "#0abde3",
-  scene: "#a29bfe",
-  label: "#55efc4",
-  festival: "#fd79a8",
+  artist: "#7A1631",
+  musician: "#7A1631",
+  venue: "#2E0A14",
+  city: "#1F7A74",
+  scene: "#5B3E9A",
+  label: "#B87A0A",
+  festival: "#D4561A",
 };
 
+// The relationship hues (graph/marks.ts has their stroke patterns)
 export const EDGE_COLORS: Record<EdgeType, string> = {
-  member_of: "#feca57",
-  former_member_of: "#636e72",
-  support_musician: "#74b9ff",
-  played_at: "#48dbfb",
-  located_in: "#0abde3",
-  part_of_scene: "#a29bfe",
-  signed_to: "#55efc4",
-  collaborated_with: "#81ecec",
-  produced_for: "#a29bfe",
-  opened_for: "#fd79a8",
-  toured_with: "#e17055",
-  performed_at_festival: "#fd79a8",
+  member_of: "#7A1631",
+  former_member_of: "#6B4A50",
+  support_musician: "#7A1631",
+  played_at: "#2E0A14",
+  located_in: "#1F7A74",
+  part_of_scene: "#5B3E9A",
+  signed_to: "#B87A0A",
+  collaborated_with: "#1F7A74",
+  produced_for: "#5B3E9A",
+  opened_for: "#D4561A",
+  toured_with: "#D4561A",
+  performed_at_festival: "#D4561A",
 };

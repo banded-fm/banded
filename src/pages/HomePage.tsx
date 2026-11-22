@@ -7,27 +7,29 @@ export const HOME_LINKS = [
   { to: "/map", label: "Map", description: "Explore the world’s music scenes based on the artist clusters in the graph." },
   { to: "/proximity", label: "Proximity", description: "Find out how close any artist is to a list of artists you already know, and see their connections." },
   { to: "/upcoming", label: "Upcoming", description: "Find upcoming concerts in a city, ranked by how well they fit the artists you like." },
-  { to: "/play", label: "Play", description: "Six Degrees of Music: a daily puzzle. Connect two artists through the people and bands between them. Also create your own puzzles and share them with friends." },
+  { to: "/play", label: "Play", description: "Six degrees of music: a daily puzzle. Connect two artists through the people and bands between them. Also create your own puzzles and share them with friends." },
   { to: "/about", label: "About", description: "How it works and FAQs" },
 ];
 
 export function HomePage() {
   return (
     <div className="page-container home-page" style={styles.container}>
-      <div style={styles.content}>
-        <h1 className="page-title home-title" style={styles.title}>Banded</h1>
-        <p style={styles.summary}>
-          Banded maps the connections between artists: shared band members, side projects,
+      <nav className="home-links" style={styles.links} aria-label="Pages">
+        {HOME_LINKS.map((link, i) => (
+          <Link key={link.to} to={link.to} viewTransition className="home-card" style={{ ...styles.row, ...(i === HOME_LINKS.length - 1 ? styles.lastRow : {}) }}>
+            <span style={styles.num} aria-hidden="true">{String(i + 1).padStart(2, "0")}</span>
+            <span className="home-card-title" style={styles.cardTitle}>{link.label}</span>
+            <span className="home-card-text" style={styles.cardText}>{link.description}</span>
+          </Link>
+        ))}
+      </nav>
+      {/* The wordmark, with what banded does beside it */}
+      <div className="home-foot" style={styles.foot}>
+        <h1 className="home-title" style={styles.title}>banded</h1>
+        <p className="home-summary" style={styles.summary}>
+          banded maps the connections between artists: shared band members, side projects,
           collaborations and tour support.
         </p>
-        <nav className="home-links" style={styles.links} aria-label="Pages">
-          {HOME_LINKS.map((link) => (
-            <Link key={link.to} to={link.to} viewTransition className="home-card" style={styles.card}>
-              <span style={styles.cardTitle}>{link.label}</span>
-              <span style={styles.cardText}>{link.description}</span>
-            </Link>
-          ))}
-        </nav>
       </div>
       <SiteFooter inline />
     </div>
@@ -38,53 +40,66 @@ const styles: Record<string, React.CSSProperties> = {
   container: {
     flex: 1,
     overflowY: "auto",
-    padding: "2.5rem 2rem 0",
+    padding: "38px 48px 0",
     display: "flex",
     flexDirection: "column",
-    alignItems: "center",
-  },
-  content: {
-    maxWidth: "760px",
-    width: "100%",
-    marginBottom: "2rem",
-  },
-  title: {
-    fontSize: "2rem",
-    fontWeight: 700,
-    color: "#ff6b6b",
-    marginBottom: "0.75rem",
-  },
-  summary: {
-    color: "#bbb",
-    fontSize: "1rem",
-    lineHeight: 1.6,
-    marginBottom: "1.75rem",
   },
   links: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-    gap: "1rem",
-  },
-  card: {
     display: "flex",
     flexDirection: "column",
-    gap: "0.4rem",
-    minHeight: "120px",
-    padding: "1.25rem",
-    background: "#1a1a1a",
-    border: "1px solid #2a2a2a",
-    borderRadius: "10px",
-    textDecoration: "none",
-    transition: "border-color 0.2s, background 0.2s",
+    maxWidth: "600px",
   },
+  // A page per row: its number, its name, what it does; 1px tint rules between
+  row: {
+    display: "flex",
+    alignItems: "baseline",
+    gap: "20px",
+    padding: "14px 0",
+    borderTop: "1px solid #D8CBBB",
+    textDecoration: "none",
+    color: "#2E0A14",
+  },
+  lastRow: { borderBottom: "1px solid #D8CBBB" },
+  num: { width: "28px", flex: "none", fontSize: "12px", letterSpacing: "0.1em", color: "#7A1631" },
   cardTitle: {
-    fontSize: "1.25rem",
-    fontWeight: 700,
-    color: "#e0e0e0",
+    width: "170px",
+    flex: "none",
+    fontSize: "30px",
+    lineHeight: 1,
+    letterSpacing: "-0.04em",
+    color: "#2E0A14",
+    transition: "color 0.15s",
   },
   cardText: {
-    fontSize: "0.9rem",
-    lineHeight: 1.5,
-    color: "#999",
+    fontSize: "14px",
+    fontWeight: 400,
+    lineHeight: 1.45,
+    color: "#2E0A14",
+  },
+  foot: {
+    marginTop: "auto",
+    paddingTop: "40px",
+    display: "flex",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    gap: "32px",
+    flexWrap: "wrap",
+  },
+  title: {
+    fontSize: "clamp(96px, 14vw, 190px)",
+    fontWeight: 500,
+    lineHeight: 0.8,
+    letterSpacing: "-0.065em",
+    color: "#2E0A14",
+    marginLeft: "-8px",
+    whiteSpace: "nowrap",
+  },
+  summary: {
+    maxWidth: "552px",
+    paddingBottom: "6px",
+    fontSize: "clamp(20px, 2.1vw, 28px)",
+    lineHeight: 1.15,
+    letterSpacing: "-0.035em",
+    color: "#7A1631",
   },
 };

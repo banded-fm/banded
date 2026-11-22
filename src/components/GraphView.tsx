@@ -1,7 +1,9 @@
 import { useRef, useEffect, useMemo } from "react";
 import ForceGraph2D, { type ForceGraphMethods, type LinkObject, type NodeObject } from "react-force-graph-2d";
 import type { ForceGraphData } from "../graph/types";
-import { LABEL_FONT, LINE_HEIGHT, boxCollide, edgeOffset, layoutBubble, type BubbleLabel } from "../graph/bubbles";
+import { LABEL_FONT, LINE_HEIGHT, boxCollide, layoutBubble, type BubbleLabel } from "../graph/bubbles";
+import { DEEP, NODE_INK, PAPER, edgeMark } from "../graph/marks";
+import { SwissLine } from "./SwissLine";
 
 interface Props {
   data: ForceGraphData;
@@ -11,17 +13,40 @@ interface Props {
 }
 
 type GraphNode = NodeObject & { name?: string; type?: string; color?: string; expanded?: boolean };
-type GraphLink = LinkObject & { color?: string };
+type GraphLink = LinkObject & { color?: string; type?: string };
 
 // Hover tooltips duplicate the canvas label after a tap on touch screens
 const isTouch = typeof window !== "undefined" && window.matchMedia("(hover: none)").matches;
 
-const FONT = `${LABEL_FONT}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+const FONT = `500 ${LABEL_FONT}px "Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+/** A node is a dot (graph units): bigger once expanded. Its name sits under it. */
+const DOT_R = 3.2;
+const DOT_R_EXPANDED = 4.2;
+/** A group's cluster of three dots is this much wider than a person's dot, as in the design (bigger than in the legend). */
+const GROUP_SCALE = 1.8;
+/**
+ * Paper left between a person's dot and the links touching it, as a share of the dot's radius (the design: about
+ * half the radius round an expanded dot, a third round a dashed one). Groups need none: their dots are edged in paper.
+ */
+const PERSON_PAD = 0.55, PERSON_PAD_UNEXPANDED = 0.33;
+/**
+ * The design's group mark: three circles in a 20-unit box centred on (10, 10.5), half as wide as GROUP_HALF.
+ * Expanded, filled with paper edges; not yet expanded, dashed outlines (smaller radii, so both span the same box).
+ */
+const GROUP_HALF = 10.7;
+const GROUP_DOTS: { x: number; y: number; filled: number; open: number }[] = [
+  { x: 4.55, y: 6.96, filled: 5.09, open: 4.29 },
+  { x: 15.45, y: 6.96, filled: 5.09, open: 4.29 },
+  { x: 10, y: 13.56, filled: 6.25, open: 5.45 },
+];
+const NAME_GAP = 1.4;
 /** Below this many screen pixels the names are unreadable: draw just the bubbles. */
 const MIN_READABLE_PX = 3.5;
 /** Room between bubbles, and extra length on each link beyond the two bubbles. */
 const COLLIDE_GAP = 3;
 const LINK_GAP = 16;
+/** opened_for's chevrons (>>>>), in graph units: spacing, depth, half height. */
+const CHEVRON_STEP = 2.6, CHEVRON_LEN = 1.3, CHEVRON_HALF = 1.3;
 /** Link arrowheads, in graph units. */
 const ARROW_LENGTH = 3.5;
 const ARROW_WIDTH = 2.4;
@@ -32,7 +57,19 @@ const MAX_FIT_ZOOM = 4;
 const HOLD_MS = 15000;
 /** How hard a held artist is pulled back to its place each tick (0..1). */
 const HOLD_STRENGTH = 0.15;
-const FALLBACK: BubbleLabel = { lines: [], width: 12, height: 8, corner: 4 };
+/**
+ * A node's mark: its dot and the name under it. `width` × `height` is the box the layout keeps clear (the dot and
+ * the name); the dot is `dy` above the box's centre (where the simulation puts the node).
+ */
+type Mark = BubbleLabel & { r: number; dy: number };
+const FALLBACK: Mark = { lines: [], width: 12, height: 8, corner: 0, r: DOT_R, dy: 0 };
+/** The box for a dot of radius r with these lines of name under it. */
+function markFor(b: BubbleLabel, expanded: boolean | undefined, group: boolean): Mark {
+  const r = (expanded ? DOT_R_EXPANDED : DOT_R) * (group ? GROUP_SCALE : 1);
+  const textW = b.lines.length ? Math.max(...b.lines.map(measure)) : 0;
+  const height = 2 * r + NAME_GAP + b.lines.length * LINE_HEIGHT;
+  return { ...b, width: Math.max(textW + 2, 2 * r + 2), height, r, dy: -height / 2 + r };
+}
 
 // One canvas to measure names with (the graph's own isn't there before the first draw)
 let measureCtx: CanvasRenderingContext2D | null = null;
@@ -42,18 +79,6 @@ function measure(text: string): number {
     if (measureCtx) measureCtx.font = FONT;
   }
   return measureCtx ? measureCtx.measureText(text).width : text.length * LABEL_FONT * 0.55;
-}
-
-/** A rounded rectangle centred on (x, y). */
-function roundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, b: BubbleLabel) {
-  const l = x - b.width / 2, t = y - b.height / 2, r = x + b.width / 2, bt = y + b.height / 2, c = b.corner;
-  ctx.beginPath();
-  ctx.moveTo(l + c, t);
-  ctx.arcTo(r, t, r, bt, c);
-  ctx.arcTo(r, bt, l, bt, c);
-  ctx.arcTo(l, bt, l, t, c);
-  ctx.arcTo(l, t, r, t, c);
-  ctx.closePath();
 }
 
 export function GraphView({ data: incoming, onNodeClick, onBackgroundClick }: Props) {
@@ -161,9 +186,9 @@ export function GraphView({ data: incoming, onNodeClick, onBackgroundClick }: Pr
 
   // Each node's lines and box, worked out once per graph
   const bubbles = useMemo(() => {
-    const map = new Map<string | number, BubbleLabel>();
+    const map = new Map<string | number, Mark>();
     for (const n of data.nodes as GraphNode[]) {
-      if (n.id !== undefined) map.set(n.id, layoutBubble(n.name ?? "", n.type, measure));
+      if (n.id !== undefined) map.set(n.id, markFor(layoutBubble(n.name ?? "", n.type, measure), n.expanded, n.type === "artist"));
     }
     return map;
   }, [data]);
@@ -267,8 +292,8 @@ export function GraphView({ data: incoming, onNodeClick, onBackgroundClick }: Pr
           fitPending.current = false;
           fit(400);
         }}
-        backgroundColor="#0f0f0f"
-        // Links run from bubble edge to bubble edge, with the arrowhead touching the target
+        backgroundColor="#F3ECE1"
+        // Links run from dot to dot, drawn as their relationship's mark (colour and stroke pattern)
         linkCanvasObjectMode={() => "replace"}
         linkCanvasObject={(link, ctx, globalScale) => {
           const l = link as GraphLink;
@@ -277,60 +302,113 @@ export function GraphView({ data: incoming, onNodeClick, onBackgroundClick }: Pr
           const dx = (t.x ?? 0) - (s.x ?? 0), dy = (t.y ?? 0) - (s.y ?? 0);
           const len = Math.hypot(dx, dy);
           if (len === 0) return;
-          const [sx, sy] = edgeOffset(bubble(s), dx, dy);
-          const [tx, ty] = edgeOffset(bubble(t), -dx, -dy);
-          const x0 = (s.x ?? 0) + sx, y0 = (s.y ?? 0) + sy;
-          const x1 = (t.x ?? 0) + tx, y1 = (t.y ?? 0) + ty;
-          if ((x1 - x0) * dx + (y1 - y0) * dy <= 0) return; // the bubbles overlap: no room for a line
-          const ux = dx / len, uy = dy / len;
-          ctx.strokeStyle = ctx.fillStyle = l.color ?? "#666";
-          ctx.lineWidth = 1 / globalScale;
+          // From dot to dot: start and end at their edges, the arrowhead touching the target's dot
+          const ms = bubble(s), mt = bubble(t);
+          const reach = (n: GraphNode, m: Mark) =>
+            n.type === "artist" ? m.r : m.r * (1 + (n.expanded ? PERSON_PAD : PERSON_PAD_UNEXPANDED));
+          const rs = reach(s, ms), rt = reach(t, mt);
+          const sxc = s.x ?? 0, syc = (s.y ?? 0) + ms.dy, txc = t.x ?? 0, tyc = (t.y ?? 0) + mt.dy;
+          const ddx = txc - sxc, ddy = tyc - syc, dlen = Math.hypot(ddx, ddy);
+          if (dlen <= rs + rt) return; // the dots touch: no room for a line
+          const ux = ddx / dlen, uy = ddy / dlen;
+          const x0 = sxc + ux * rs, y0 = syc + uy * rs;
+          const tGap = t.type === "artist" ? rt + 0.6 : rt;
+          const x1 = txc - ux * tGap, y1 = tyc - uy * tGap;
+          const mark = edgeMark(l.type);
+          const arrowL = ARROW_LENGTH * Math.max(1, mark.width), arrowW = ARROW_WIDTH * Math.max(1, mark.width);
+          ctx.strokeStyle = ctx.fillStyle = mark.color;
+          ctx.lineWidth = Math.max(mark.width, 1 / globalScale);
+          ctx.lineCap = mark.round ? "round" : "butt";
+          ctx.setLineDash(mark.dash);
           ctx.beginPath();
-          ctx.moveTo(x0, y0);
-          ctx.lineTo(x1 - ux * ARROW_LENGTH, y1 - uy * ARROW_LENGTH);
+          if (mark.chevrons) {
+            // A run of >'s pointing at the target, every CHEVRON_STEP, up to its dot (they show the direction: no arrowhead)
+            const run = Math.hypot(x1 - x0, y1 - y0);
+            for (let d = CHEVRON_STEP; d <= run; d += CHEVRON_STEP) {
+              const px = x0 + ux * d, py = y0 + uy * d;
+              ctx.moveTo(px - ux * CHEVRON_LEN - uy * CHEVRON_HALF, py - uy * CHEVRON_LEN + ux * CHEVRON_HALF);
+              ctx.lineTo(px, py);
+              ctx.lineTo(px - ux * CHEVRON_LEN + uy * CHEVRON_HALF, py - uy * CHEVRON_LEN - ux * CHEVRON_HALF);
+            }
+          } else {
+            ctx.moveTo(x0, y0);
+            ctx.lineTo(x1 - ux * arrowL, y1 - uy * arrowL);
+          }
           ctx.stroke();
+          ctx.setLineDash([]);
+          if (mark.chevrons) return;
           ctx.beginPath();
           ctx.moveTo(x1, y1);
-          ctx.lineTo(x1 - ux * ARROW_LENGTH - uy * ARROW_WIDTH / 2, y1 - uy * ARROW_LENGTH + ux * ARROW_WIDTH / 2);
-          ctx.lineTo(x1 - ux * ARROW_LENGTH + uy * ARROW_WIDTH / 2, y1 - uy * ARROW_LENGTH - ux * ARROW_WIDTH / 2);
+          ctx.lineTo(x1 - ux * arrowL - uy * arrowW / 2, y1 - uy * arrowL + ux * arrowW / 2);
+          ctx.lineTo(x1 - ux * arrowL + uy * arrowW / 2, y1 - uy * arrowL - ux * arrowW / 2);
           ctx.closePath();
           ctx.fill();
         }}
         nodeCanvasObject={(node, ctx, globalScale) => {
           const n = node as GraphNode;
-          const x = n.x ?? 0, y = n.y ?? 0;
-          const color = n.color ?? "#fff";
-          const b = bubble(n);
+          const m = bubble(n);
+          const x = n.x ?? 0, cy = (n.y ?? 0) + m.dy;
+          const group = n.type === "artist";
 
-          // Expanded: filled with the type's colour, dark text. Not expanded: an
-          // outline around the page colour (links never show through it), light text.
-          roundedRect(ctx, x, y, b);
-          ctx.fillStyle = n.expanded ? color : "#0f0f0f";
-          ctx.fill();
-          if (!n.expanded) {
-            ctx.strokeStyle = color;
-            ctx.lineWidth = Math.max(0.6, 1.6 / globalScale);
+          // As in the design: a person is a filled dot, a group a cluster of three filled dots edged in paper.
+          // Not expanded: dashed outlines filled with paper (so links never show through), deep for a person and
+          // maroon for a group.
+          if (group) {
+            const s = m.r / GROUP_HALF;
+            for (const [i, d] of GROUP_DOTS.entries()) {
+              ctx.beginPath();
+              ctx.arc(x + (d.x - 10) * s, cy + (d.y - 10.5) * s, (n.expanded ? d.filled : d.open) * s, 0, 2 * Math.PI);
+              ctx.fillStyle = n.expanded ? NODE_INK : PAPER;
+              ctx.fill();
+              // Not expanded: the same thin, deep, dashed outline as a person not yet expanded
+              ctx.strokeStyle = n.expanded ? PAPER : DEEP;
+              ctx.lineWidth = n.expanded ? (i === 2 ? 1.7 : 1) * s : 0.7;
+              ctx.setLineDash(n.expanded ? [] : [1, 1]);
+              ctx.stroke();
+            }
+          } else if (n.expanded) {
+            ctx.beginPath();
+            ctx.arc(x, cy, m.r, 0, 2 * Math.PI);
+            ctx.fillStyle = NODE_INK;
+            ctx.fill();
+          } else {
+            ctx.beginPath();
+            ctx.arc(x, cy, m.r - 0.35, 0, 2 * Math.PI);
+            ctx.fillStyle = PAPER;
+            ctx.fill();
+            ctx.strokeStyle = DEEP;
+            ctx.lineWidth = 0.7;
+            ctx.setLineDash([1, 1]);
             ctx.stroke();
           }
+          ctx.setLineDash([]);
 
-          if (b.lines.length === 0 || LABEL_FONT * globalScale < MIN_READABLE_PX) return;
+          if (m.lines.length === 0 || LABEL_FONT * globalScale < MIN_READABLE_PX) return;
+          // The name under the dot, on a paper halo so links passing behind don't cut through it
           ctx.font = FONT;
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
-          ctx.fillStyle = n.expanded ? "#111" : "#e0e0e0";
-          const top = y - ((b.lines.length - 1) * LINE_HEIGHT) / 2;
-          b.lines.forEach((line, i) => ctx.fillText(line, x, top + i * LINE_HEIGHT));
+          ctx.lineJoin = "round";
+          ctx.lineWidth = 1.4;
+          ctx.strokeStyle = PAPER;
+          ctx.fillStyle = DEEP;
+          const top = cy + m.r + NAME_GAP + LINE_HEIGHT / 2;
+          m.lines.forEach((line, i) => {
+            ctx.strokeText(line, x, top + i * LINE_HEIGHT);
+            ctx.fillText(line, x, top + i * LINE_HEIGHT);
+          });
         }}
         nodePointerAreaPaint={(node, color, ctx) => {
-          const n = node as GraphNode;
-          roundedRect(ctx, n.x ?? 0, n.y ?? 0, bubble(n));
+          const n = node as GraphNode, m = bubble(n);
           ctx.fillStyle = color;
-          ctx.fill();
+          ctx.fillRect((n.x ?? 0) - m.width / 2, (n.y ?? 0) - m.height / 2, m.width, m.height);
         }}
       />
       {data.nodes.length === 0 && (
-        <div style={styles.placeholder}>
-          Search for an artist to start building the scene graph.
+        <div className="graph-empty" style={styles.placeholder}>
+          <p className="graph-empty-text" style={styles.placeholderText}>Search an artist to start</p>
+          {/* Phones: the design's tighter, taller zigzag (65px segments, 118px high: index.css) */}
+          <SwissLine layered bleed height={150} phoneSegmentWidth={65} style={styles.placeholderLine} />
         </div>
       )}
     </div>
@@ -338,13 +416,22 @@ export function GraphView({ data: incoming, onNodeClick, onBackgroundClick }: Pr
 }
 
 const styles: Record<string, React.CSSProperties> = {
+  // Empty: the invitation, large, flush left; the line runs across the foot of the page
   placeholder: {
     position: "absolute",
-    top: "50%",
-    left: "50%",
-    transform: "translate(-50%, -50%)",
-    color: "#666",
-    fontSize: "1.1rem",
-    textAlign: "center",
+    inset: 0,
+    pointerEvents: "none",
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "space-between",
+    padding: "40px 48px 28px",
   },
+  placeholderText: {
+    maxWidth: "700px",
+    color: "#2E0A14",
+    fontSize: "clamp(36px, 5.6vw, 76px)",
+    lineHeight: 0.95,
+    letterSpacing: "-0.055em",
+  },
+  placeholderLine: { marginLeft: "-48px", width: "calc(100% + 96px)" },
 };
