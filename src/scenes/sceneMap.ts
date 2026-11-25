@@ -301,10 +301,11 @@ export function citiesByName(data: ScenesData): SceneCity[] {
  * Where to load the scenes file from: next to the app first (local dev, with
  * public/scenes.json), then next to the graph on the CDN (cdn.banded.fm/scenes.json).
  */
-export function scenesUrls(base: string, graphCdnUrl: string): string[] {
-  const urls = [`${base}scenes.json`];
-  if (graphCdnUrl) urls.push(graphCdnUrl.replace(/[^/]*$/, "scenes.json"));
-  return urls;
+export function scenesUrls(base: string, graphCdnUrl: string, cdnOnly = false): string[] {
+  const cdn = graphCdnUrl ? graphCdnUrl.replace(/[^/]*$/, "scenes.json") : "";
+  // cdnOnly: a build that never deploys scenes.json next to the app (Cloudflare) skips the request that would 404
+  if (cdnOnly && cdn) return [cdn];
+  return cdn ? [`${base}scenes.json`, cdn] : [`${base}scenes.json`];
 }
 
 export async function loadScenes(urls: string[], fetchImpl: typeof fetch = fetch): Promise<ScenesData> {

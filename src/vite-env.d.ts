@@ -18,3 +18,5 @@ interface ImportMeta {
  * Empty string when not building for a CDN host (e.g. GitHub Pages / dev).
  */
 declare const __GRAPH_DB_CDN_URL__: string;
+/** True on Cloudflare builds: graph.db.gz and scenes.json are only on the CDN (vite.config.ts). */
+declare const __ASSETS_ON_CDN__: boolean;

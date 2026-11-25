@@ -4,10 +4,73 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#1a1a1a" />
-    <title>Banded</title>
+    <title>Banded: map the connections between music artists</title>
+    <!-- What the site is, for search engines, link previews and agents that read the HTML without running it -->
+    <meta name="description" content="Banded maps the real-world connections between musical artists: shared band members, side projects, collaborations, producers and tour support. Explore an artist's network, find music scenes on a world map, score how close an artist is to your taste, find upcoming concerts, and play a daily six degrees game." />
+    <link rel="canonical" href="https://banded.fm/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Banded" />
+    <meta property="og:url" content="https://banded.fm/" />
+    <meta property="og:title" content="Banded: map the connections between music artists" />
+    <meta property="og:description" content="Explore the people and bands behind the music you like: band members, side projects, collaborations and the scenes they come from." />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Banded: map the connections between music artists" />
+    <meta name="twitter:description" content="Explore the people and bands behind the music you like: band members, side projects, collaborations and the scenes they come from." />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Banded",
+        "url": "https://banded.fm/",
+        "description": "A graph of the real-world connections between musical artists (band members, side projects, collaborations, producers and opening acts), built from MusicBrainz and setlist.fm data.",
+        "applicationCategory": "EntertainmentApplication",
+        "operatingSystem": "Any (web browser)",
+        "isAccessibleForFree": true,
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+        "featureList": [
+          "Graph: search artists and explore their network of band members, side projects and collaborators",
+          "Map: the world's music scenes, found from clusters of connected artists",
+          "Proximity: score how close an artist is to a list of artists you like",
+          "Upcoming: upcoming concerts in a city, ranked by how well they fit your taste",
+          "Play: Six Degrees of Music, a daily puzzle connecting two artists"
+        ],
+        "sameAs": ["https://github.com/banded-fm/banded"]
+      }
+    </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Shown until the app starts (React replaces it), and the page's text for anything that reads the HTML
+           without running JavaScript. Keep it in step with the app: Home's pages and the About page. -->
+      <main style="max-width: 720px; margin: 0 auto; padding: 32px 20px; font-family: system-ui, sans-serif; line-height: 1.5">
+        <h1>Banded</h1>
+        <p>
+          Banded is a graph-powered music discovery tool that maps the relationships between musical artists. Instead
+          of recommending music from listening history, it shows the real-world connections between artists, like
+          shared band members, side projects, collaborations and tour support, that make up music scenes.
+        </p>
+        <h2>What you can do</h2>
+        <ul>
+          <li><a href="/#/graph">Graph</a>: search artists and walk through their network: band members, side projects and collaborators.</li>
+          <li><a href="/#/map">Map</a>: explore the world's music scenes, found from clusters of connected artists.</li>
+          <li><a href="/#/proximity">Proximity</a>: find out how close any artist is to a list of artists you already like, and see how they connect.</li>
+          <li><a href="/#/upcoming">Upcoming</a>: find upcoming concerts in a city, ranked by how well they fit the artists you like.</li>
+          <li><a href="/#/play">Play</a>: Six Degrees of Music, a daily puzzle. Connect two artists through the people and bands between them, or make your own puzzle and share it.</li>
+          <li><a href="/#/about">About</a>: how it works and FAQs.</li>
+        </ul>
+        <h2>Where the data comes from</h2>
+        <p>
+          Artist relationships come from <a href="https://musicbrainz.org">MusicBrainz</a> (band members, recording
+          credits, producers), concert history from <a href="https://www.setlist.fm">setlist.fm</a>, and upcoming
+          concerts from <a href="https://www.pollstar.com">Pollstar</a>. Connections and shows may be missing because
+          the data is incomplete.
+        </p>
+        <p>
+          Banded is free and open source: <a href="https://github.com/banded-fm/banded">github.com/banded-fm/banded</a>.
+          Banded runs in your browser and needs JavaScript.
+        </p>
+      </main>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
