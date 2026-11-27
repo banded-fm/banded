@@ -1,0 +1,5 @@
+# Banded: everything may be crawled
+User-agent: *
+Allow: /
+
+Sitemap: https://banded.fm/sitemap.xml

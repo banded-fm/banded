@@ -52,7 +52,8 @@ export async function getDb(): Promise<DB> {
     // and transparently falls back to the CDN when it isn't.
     const localUrl = `${import.meta.env.BASE_URL}graph.db.gz`;
     const cdnUrl = import.meta.env.VITE_GRAPH_DB_URL || __GRAPH_DB_CDN_URL__;
-    const candidates = [localUrl, cdnUrl].filter((u): u is string => Boolean(u));
+    // On Cloudflare the file is never deployed next to the app, so go straight to the CDN (no 404 first)
+    const candidates = (__ASSETS_ON_CDN__ && cdnUrl ? [cdnUrl] : [localUrl, cdnUrl]).filter((u): u is string => Boolean(u));
 
     // A dropped connection is resumed rather than failing the whole download (see download.ts).
     let bytes: Uint8Array | null = null;

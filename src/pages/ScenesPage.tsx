@@ -64,7 +64,7 @@ export function ScenesPage() {
   const [worldHigh, setWorldHigh] = useState<string | null>(null);
 
   useEffect(() => {
-    loadScenes(scenesUrls(import.meta.env.BASE_URL, __GRAPH_DB_CDN_URL__))
+    loadScenes(scenesUrls(import.meta.env.BASE_URL, __GRAPH_DB_CDN_URL__, __ASSETS_ON_CDN__))
       .then(setData)
       .catch((e: unknown) => setError(e instanceof Error ? e.message : "Scenes could not be loaded."));
   }, []);
@@ -462,7 +462,7 @@ export function ScenesPage() {
         <div className="scenes-zoom" style={styles.mapButtons}>
           <div style={styles.zoom}>
             <button type="button" aria-label="Filters" title={filtersOpen ? "Hide filters" : "Show filters"}
-              aria-pressed={filtersOpen} aria-controls="scenes-filters"
+              aria-pressed={filtersOpen} aria-controls={filtersOpen ? "scenes-filters" : undefined}
               style={{ ...styles.zoomBtn, ...(filtersOpen ? styles.zoomBtnOn : {}) }}
               onClick={() => setFiltersOpen((o) => !o)}>
               <FilterIcon />

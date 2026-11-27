@@ -1,0 +1,20 @@
+# Banded
+
+> Banded (https://banded.fm) maps the real-world connections between musical artists: shared band members, side projects, collaborations, producers and opening acts. It is a single-page web app that runs in the browser; its pages need JavaScript, so this file describes them in plain text.
+
+Banded is built from MusicBrainz data dumps (artists, band membership, recording and production credits), concert history from setlist.fm, and upcoming concerts from Pollstar. The graph is precomputed into a SQLite database that the browser downloads and queries locally. It is free, has no ads, and is open source.
+
+## Pages
+
+- [Home](https://banded.fm/): what Banded is, with a link to each page.
+- [Graph](https://banded.fm/#/graph): search an artist and explore their network: band members, former members, supporting musicians, artists they played or sang with, producers and opening acts. Click a node to add its connections.
+- [Map](https://banded.fm/#/map): the world's music scenes on a map: in each major city, clusters of connected artists, named by genre and era.
+- [Proximity](https://banded.fm/#/proximity): enter artists you like and an artist to compare; Banded scores 0 to 100 how close they are, from the strongest path of relationships between them, and shows that path.
+- [Upcoming](https://banded.fm/#/upcoming): enter a city, dates and artists you like; Banded lists upcoming concerts there, ranked by how close each headliner is to your artists.
+- [Play](https://banded.fm/#/play): Six Degrees of Music, a daily puzzle: connect two artists in as few steps as you can, one connection at a time. Custom puzzles can be made and shared by link.
+- [About](https://banded.fm/#/about): how it works and FAQs.
+
+## Notes
+
+- MusicBrainz and setlist.fm are crowd-sourced, so some artists, connections and shows are missing.
+- Source code: https://github.com/banded-fm/banded

@@ -158,6 +158,8 @@ describe("scene map helpers", () => {
   it("loads the scenes file next to the app first, then next to the graph on the CDN", async () => {
     expect(scenesUrls("/", "https://cdn.banded.fm/graph.db.gz")).toEqual(["/scenes.json", "https://cdn.banded.fm/scenes.json"]);
     expect(scenesUrls("/banded/", "")).toEqual(["/banded/scenes.json"]);
+    expect(scenesUrls("/", "https://cdn.banded.fm/graph.db.gz", true)).toEqual(["https://cdn.banded.fm/scenes.json"]);
+    expect(scenesUrls("/banded/", "", true)).toEqual(["/banded/scenes.json"]);
     const seen: string[] = [];
     const fetchImpl = (async (url: string) => {
       seen.push(url);

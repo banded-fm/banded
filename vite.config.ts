@@ -30,6 +30,9 @@ export default defineConfig(({ mode }) => {
     define: {
       // Inlined at build; read in src/db/graphDb.ts.
       __GRAPH_DB_CDN_URL__: JSON.stringify(graphDbCdnUrl),
+      // Cloudflare builds don't deploy graph.db.gz or scenes.json (public/.assetsignore; scenes.json is
+      // gitignored), so the app asks the CDN straight away rather than getting a 404 from its own origin first.
+      __ASSETS_ON_CDN__: JSON.stringify(isCloudflareBuild && Boolean(graphDbCdnUrl)),
     },
   };
 });

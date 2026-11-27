@@ -34,7 +34,8 @@ export function Layout() {
 
   // The home page is its own menu: no nav bar there.
   // It puts the footer after its content itself.
-  if (location.pathname === "/") return <Outlet />;
+  // Each page sits in the document's one <main> landmark (display: contents, so the layout is unchanged).
+  if (location.pathname === "/") return <main style={styles.main}><Outlet /></main>;
 
   return (
     <>
@@ -67,7 +68,7 @@ export function Layout() {
         </div>
       </nav>
       {menuOpen && <div className="nav-backdrop" style={styles.backdrop} onClick={() => setMenuOpen(false)} />}
-      <Outlet />
+      <main style={styles.main}><Outlet /></main>
       {/* Not on About, which has the full credits */}
       {location.pathname !== "/about" && <SiteFooter />}
     </>
@@ -75,6 +76,7 @@ export function Layout() {
 }
 
 const styles: Record<string, React.CSSProperties> = {
+  main: { display: "contents" },
   nav: {
     display: "flex",
     alignItems: "center",

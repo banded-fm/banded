@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- One URL: the app's pages are hash routes (/#/graph ...), which search engines treat as this one page -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://banded.fm/</loc>
+  </url>
+</urlset>
