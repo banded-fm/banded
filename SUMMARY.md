@@ -269,7 +269,7 @@ src/
 │   ├── marks.ts          — How each relationship is drawn (colour, width, dash) and the node inks; shared by GraphView and GraphLegend.
 │   └── SceneGraph.ts     — In-memory graph with dedup/merge, persistence, expanded tracking.
 ├── pages/
-│   ├── HomePage.tsx      — Default page (#/), no nav bar: a numbered row per page (HOME_LINKS), then the wordmark and one-line summary. Going to or from it, the title glides into the nav brand while the bar slides down, both in 0.4 s on one linear() spring curve (a quick ~11% wind-up the other way, a sweep, ~10% overshoot), no page fade (view transitions: `viewTransition` links, `view-transition-name` in index.css; off with reduced motion).
+│   ├── HomePage.tsx      — Default page (#/), no nav bar: a numbered row per page (HOME_LINKS), then the wordmark and one-line summary. Going to or from it, the nav bar slides down (or up) in 0.4 s on a springy linear() curve; the rest of the page, the title included, switches at once (view transitions: `viewTransition` links, `view-transition-name` in index.css; off with reduced motion).css; off with reduced motion).
 │   ├── ExplorePage.tsx   — Graph (#/graph): graph exploration via SQLite. Only person/group nodes. Albums filtered out.
 │   ├── PlayPage.tsx      — Six Degrees game: BFS pathfinding, valid moves list with relationship labels,
 │   │                       undo, sorted by rel_type priority, par scoring, reveal shortest path.
@@ -302,7 +302,7 @@ src/
 ├── components/
 │   ├── ArtistAutocomplete.tsx — Artist input + dropdown (keyboard, ARIA combobox, 44px rows on phones).
 │   │                       Used by SearchBar, Discover, Similarity and Play's custom game.
-│   ├── Layout.tsx        — Shared nav bar: Graph (#/graph), Map (#/map), Proximity (#/proximity), Upcoming (#/upcoming), Play, About; the brand links home; hidden on the home page. Pins SiteFooter under every page but Home (which puts it after its content) and About (which has the full credits).
+│   ├── Layout.tsx        — Shared nav bar: Graph (#/graph), Map (#/map), Proximity (#/proximity), Upcoming (#/upcoming), Play, About; the brand (the "banded" wordmark, src/assets/banded-logo.svg) links home; hidden on the home page. Pins SiteFooter under every page but Home (which puts it after its content) and About (which has the full credits).
 │   ├── SiteFooter.tsx    — One-line footer: the data sources (MusicBrainz, setlist.fm, Pollstar) and that connections and shows may be missing.
 │   │                       Inline tabs on desktop; hamburger menu below 640px.
 │   ├── SearchBar.tsx     — Search input, expand, reset. Responsive layout.
@@ -397,6 +397,7 @@ docs/
 
 public/
 ├── graph.db.gz           — Precomputed SQLite graph (committed, ~49MB).
+├── favicon.ico / favicon.svg / apple-touch-icon.png — the "dd" mark: ICO (16, 32, 48 px), square SVG, 180 px PNG on paper for iOS.
 ├── .assetsignore         — Keeps graph.db.gz out of the Cloudflare upload (25 MiB asset cap).
 ├── robots.txt / sitemap.xml — Crawling allowed; one URL (the pages are hash routes).
 ├── llms.txt              — Plain-text description of the site and its pages for LLM agents (llmstxt.org).

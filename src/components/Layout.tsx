@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { SiteFooter } from "./SiteFooter";
+import logo from "../assets/banded-logo.svg";
 
 // Names and order of the pages.
 const NAV_ITEMS = [
@@ -40,7 +41,9 @@ export function Layout() {
   return (
     <>
       <nav className="app-nav" style={styles.nav}>
-        <Link to="/" viewTransition className="nav-brand" style={styles.brand} aria-label="Banded home">banded.fm</Link>
+        <Link to="/" viewTransition className="nav-brand" style={styles.brand} aria-label="Banded home">
+          <img src={logo} alt="" className="nav-logo" style={styles.logo} />
+        </Link>
         {/* Mobile only (see index.css): current page + the Menu button */}
         {current && <span className="nav-current eyebrow" style={styles.current}>{current.label}</span>}
         <button
@@ -99,13 +102,13 @@ const styles: Record<string, React.CSSProperties> = {
     flex: "none",
   },
   brand: {
-    fontWeight: 500,
-    fontSize: "24px",
-    letterSpacing: "-0.04em",
-    color: "#7A1631",
+    display: "flex",
+    alignItems: "center",
     marginRight: "auto",
     textDecoration: "none",
   },
+  // The "banded" wordmark (src/assets/banded-logo.svg): as tall as the old 24px text's letters (phones: index.css)
+  logo: { display: "block", height: "22px", width: "auto" },
   current: {
     display: "none",
     color: "#7A1631",

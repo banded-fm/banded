@@ -148,13 +148,11 @@ input[type="checkbox"] { accent-color: var(--maroon); }
   .spinner { animation-duration: 2.4s; }
 }
 
-/* Home <-> the other pages (Links with viewTransition): the home title glides
-   into the nav brand and the nav bar slides down (and back up going home); the
-   rest of the page switches at once (no cross-fade). Browsers without view
-   transitions just switch pages. */
+/* Home <-> the other pages (Links with viewTransition): the nav bar slides down
+   (and back up going home); the rest of the page, the title and the nav logo
+   included, switches at once (no cross-fade). Browsers without view transitions
+   just switch pages. */
 .home-title { width: fit-content; }
-.home-title,
-.nav-brand { view-transition-name: site-title; }
 .app-nav { view-transition-name: app-nav; }
 ::view-transition-group(*),
 ::view-transition-old(*),
@@ -164,13 +162,11 @@ input[type="checkbox"] { accent-color: var(--maroon); }
 }
 ::view-transition-old(root),
 ::view-transition-new(root) { animation: none; }
-/* The title and the bar move on the same curve over 0.4 s, springy at both
-   ends: a quick wind-up (first 0.1 s: they pull back ~11% the other way), a
+/* The bar moves on this curve over 0.4 s, springy at both ends: a quick wind-up (first 0.1 s: they pull back ~11% the other way), a
    straight sweep (0.1 s), then they overshoot ~10% and settle (0.2 s).
    linear() is that curve (a damped spring into a straight sweep into a damped
    spring); browsers without linear() use the cubic-bezier (a smaller pull-back
    and overshoot). */
-::view-transition-group(site-title),
 ::view-transition-new(app-nav):only-child,
 ::view-transition-old(app-nav):only-child {
   animation-duration: 0.4s;
@@ -185,8 +181,6 @@ input[type="checkbox"] { accent-color: var(--maroon); }
    on the way out), a strip of its own colour fills the gap above it */
 ::view-transition-new(app-nav),
 ::view-transition-old(app-nav) { box-shadow: 0 -24px 0 var(--paper); }
-/* Above the nav bar: going from home, the bar is new, so it would be painted on top */
-::view-transition-group(site-title) { z-index: 1; }
 ::view-transition-new(app-nav):only-child { animation-name: nav-slide-in; }
 ::view-transition-old(app-nav):only-child { animation-name: nav-slide-out; }
 /* Play, Start game: the start and end names and the par glide (and resize) from the start screen into the game */
@@ -339,10 +333,7 @@ input[type="checkbox"] { accent-color: var(--maroon); }
     padding-left: max(16px, env(safe-area-inset-left)) !important;
     padding-right: max(12px, env(safe-area-inset-right)) !important;
   }
-  .nav-brand {
-    font-size: 22px !important;
-    white-space: nowrap;
-  }
+  .nav-brand .nav-logo { height: 20px !important; }
   .nav-current,
   .nav-toggle {
     display: inline-flex !important;
