@@ -595,7 +595,9 @@ export function PlayPage() {
     if (!state.startId || !state.endId) return "";
     const url = new URL(window.location.href);
     url.search = "";
-    url.hash = `#/play?${new URLSearchParams({ start: state.startId, end: state.endId }).toString()}`;
+    // Today's puzzle shares Play itself (banded.fm/#/play), which opens on the day's puzzle; any other puzzle shares
+    // its start and end
+    url.hash = state.daily ? "#/play" : `#/play?${new URLSearchParams({ start: state.startId, end: state.endId }).toString()}`;
     return url.toString();
   })();
   // How far each step was from the end: past AWAY_DEPTH counts as AWAY_DEPTH + 1 once the distances are known.
