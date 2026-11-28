@@ -705,7 +705,7 @@ export function PlayPage() {
     <div ref={startPageRef} className="page-container play-start" style={styles.startPage}>
       <div style={styles.startMain}>
         <div className="play-start-head" style={styles.header}>
-          {state.daily && <div className="eyebrow">Today's puzzle · {dailyLabel}</div>}
+          {state.daily && <div className="eyebrow">Daily puzzle #{puzzleNumber(state.daily)} · {dailyLabel}</div>}
           <h1 className="page-title play-start-title" style={styles.title}>Six degrees of music{puzzleNo}</h1>
           <p style={styles.subtitle}>
             Connect these two {state.startArtist?.type === "group" ? "groups" : "artists"} in as few steps as you can.
@@ -751,7 +751,7 @@ export function PlayPage() {
       <div className="page-container play-page" style={styles.container}>
         <div className="play-left" style={styles.left}>
         <div className="play-head" style={styles.header}>
-          {state.daily && <div className="eyebrow">Today's puzzle · {dailyLabel}</div>}
+          {state.daily && <div className="eyebrow">Daily puzzle #{puzzleNumber(state.daily)} · {dailyLabel}</div>}
           <h1 className="page-title play-title" style={styles.title}>Six degrees of music{puzzleNo}</h1>
           <p style={styles.subtitle}>
             Connect these two {state.startArtist?.type === "group" ? "groups" : "artists"} in as few steps as you can.
@@ -800,30 +800,21 @@ export function PlayPage() {
                 </span>
               ))}
             </div>}
-            {/* The par (or shortest) path, once revealed: after giving up, or asked for after a win */}
-            {state.revealed && (
-              <>
-                {won && <p className="eyebrow" style={{ marginTop: "8px" }}>{state.listed ? "Par path" : "Shortest path"}</p>}
-                <div style={styles.chainDisplay}>
-                  {state.shortestPath!.map((nodeId, i) => {
-                    const node = pathNodes.get(nodeId) ?? findNodeById(nodeId);
-                    return (
-                      <span key={nodeId} style={styles.chainItem}>
-                        <span className="path-chip" style={styles.guessChip}>{node?.name ?? nodeId}</span>
-                        {i < state.shortestPath!.length - 1 && <span className="chain-arrow" style={styles.chainArrow}>→</span>}
-                      </span>
-                    );
-                  })}
-                </div>
-              </>
-            )}
             <div style={styles.resultButtons}>
               <button onClick={() => setShareOpen(true)} style={styles.shareResultBtn}>Share result</button>
-              {won && !state.revealed && (
-                <button onClick={handleReveal} style={styles.outlineBtn}>
-                  {state.listed ? "Show par path" : "Show shortest path"}
-                </button>
-              )}
+            </div>
+            {/* Banded's path (the par path, or the shortest for a custom game): shown once it's over, won or given up */}
+            <p className="eyebrow" style={{ marginTop: "8px" }}>Banded's path</p>
+            <div style={styles.chainDisplay}>
+              {state.shortestPath!.map((nodeId, i) => {
+                const node = pathNodes.get(nodeId) ?? findNodeById(nodeId);
+                return (
+                  <span key={nodeId} style={styles.chainItem}>
+                    <span className="path-chip" style={styles.guessChip}>{node?.name ?? nodeId}</span>
+                    {i < state.shortestPath!.length - 1 && <span className="chain-arrow" style={styles.chainArrow}>→</span>}
+                  </span>
+                );
+              })}
             </div>
           </div>
         )}
@@ -893,7 +884,7 @@ export function PlayPage() {
                 Today's puzzle
               </button>
             )}
-            <button onClick={startNewGame} disabled={state.status === "loading"} style={state.daily ? styles.newGameBtn : styles.outlineBtn}>
+            <button onClick={startNewGame} disabled={state.status === "loading"} style={styles.outlineBtn}>
               Random puzzle
             </button>
             <button
@@ -965,7 +956,6 @@ export function PlayPage() {
                         {formatRelType(m.relType, m.type, m.outgoing)}
                         {d !== undefined && <> · <span style={{ color: colour }}>{awayLabel(d > AWAY_DEPTH ? undefined : d)}</span></>}
                       </span>
-                      <span className="move-arrow" aria-hidden="true" style={styles.moveArrow}>→</span>
                     </button>
                   );
                 })
@@ -1120,10 +1110,11 @@ const styles: Record<string, React.CSSProperties> = {
   bottom: { marginTop: "28px", display: "flex", flexDirection: "column", gap: "36px" },
   right: { flex: "0 1 512px", minWidth: 0, display: "flex", flexDirection: "column" },
   header: { display: "flex", flexDirection: "column", gap: "8px" },
-  title: { fontSize: "clamp(40px, 4.6vw, 62px)", lineHeight: 1, letterSpacing: "-0.055em", color: "#2E0A14" },
-  // The daily puzzle's number after the title, two thirds its size, the # smaller again (the design)
-  puzzleNo: { fontSize: "0.66em", letterSpacing: "-0.04em", marginLeft: "0.15em", color: "#2E0A14", whiteSpace: "nowrap" },
-  puzzleHash: { fontSize: "0.51em" },
+  // Maroon, as on phones (the puzzle number stays deep: puzzleNo)
+  title: { fontSize: "clamp(40px, 4.6vw, 62px)", lineHeight: 1, letterSpacing: "-0.055em", color: "#7A1631" },
+  // The daily puzzle's number after the title, as large as it (the design); the # two thirds of that
+  puzzleNo: { letterSpacing: "-0.04em", marginLeft: "0.2em", color: "#2E0A14", whiteSpace: "nowrap" },
+  puzzleHash: { fontSize: "0.667em" },
   // Start screen (Swiss-Play-Start): the puzzle on the left, Start game and the other puzzles bottom right
   startPage: { flex: 1, display: "flex", padding: "30px 48px 40px", overflowY: "auto" },
   startMain: { flex: "1 1 auto", minWidth: 0, display: "flex", flexDirection: "column" },
@@ -1136,7 +1127,7 @@ const styles: Record<string, React.CSSProperties> = {
   startEndLabel: { marginTop: "12px" },
   startPar: { marginTop: "20px", fontSize: "40px", lineHeight: 1, letterSpacing: "-0.04em", color: "#7A1631" },
   startActions: { flex: "0 0 406px", display: "flex", flexDirection: "column", gap: "16px" },
-  startGameBtn: { height: "48px", display: "flex", alignItems: "center", padding: "0 20px", border: "none", background: "#7A1631", color: "#F3ECE1", fontWeight: 500, fontSize: "15px", cursor: "pointer", textAlign: "left" },
+  startGameBtn: { height: "48px", display: "flex", alignItems: "center", justifyContent: "center", padding: "0 20px", border: "none", background: "#7A1631", color: "#F3ECE1", fontWeight: 500, fontSize: "15px", cursor: "pointer", textAlign: "center" },
   // Two buttons share a row; with a third (Today's puzzle, on another puzzle) it takes a row of its own above them
   startMore: { display: "flex", flexWrap: "wrap", gap: "12px" },
   startMoreBtn: { flex: "1 1 calc(50% - 6px)", minWidth: 0, height: "48px", padding: "0 10px", border: "2px solid #2E0A14", background: "transparent", color: "#2E0A14", fontWeight: 500, fontSize: "15px", cursor: "pointer", whiteSpace: "nowrap" },
@@ -1163,8 +1154,7 @@ const styles: Record<string, React.CSSProperties> = {
   // A connection per row: a maroon edge (its distance's colour once the hint is used), 1px tint rules
   moveItem: { display: "flex", alignItems: "center", gap: "14px", width: "100%", minHeight: "56px", padding: "0 0 0 16px", background: "none", fontWeight: 500, border: "none", borderTop: "1px solid #D8CBBB", borderLeft: "6px solid transparent", color: "#2E0A14", cursor: "pointer", fontSize: "20px", letterSpacing: "-0.02em", textAlign: "left" },
   moveName: { flex: 1, minWidth: 0 },
-  moveRel: { marginLeft: "auto", fontSize: "12px", letterSpacing: "0.1em", textTransform: "uppercase", color: "#6B4A50", whiteSpace: "nowrap", paddingRight: "4px" },
-  moveArrow: { color: "#7A1631", fontSize: "18px", paddingRight: "12px" },
+  moveRel: { marginLeft: "auto", fontSize: "12px", letterSpacing: "0.1em", textTransform: "uppercase", color: "#6B4A50", whiteSpace: "nowrap", paddingRight: "12px" },
   noMoves: { color: "#6B4A50", fontSize: "15px", fontWeight: 400, padding: "14px 0", borderTop: "1px solid #D8CBBB" },
   guessList: { display: "flex", flexWrap: "wrap", gap: "10px 0", alignItems: "center" },
   guessStep: { display: "flex", alignItems: "center" },
@@ -1197,10 +1187,10 @@ const styles: Record<string, React.CSSProperties> = {
   customForm: { display: "flex", flexDirection: "column", gap: "20px" },
   // The sheet's fields and button at the site's usual sizes: Play's filter box, its Start game button (phones: index.css)
   customInput: { width: "100%", height: "48px", padding: 0, fontSize: "22px", letterSpacing: "-0.03em" },
-  customStartBtn: { height: "48px", display: "flex", alignItems: "center", padding: "0 20px", border: "none", background: "#7A1631", color: "#F3ECE1", fontWeight: 500, fontSize: "15px", cursor: "pointer", textAlign: "left" },
+  customStartBtn: { height: "48px", display: "flex", alignItems: "center", justifyContent: "center", padding: "0 20px", border: "none", background: "#7A1631", color: "#F3ECE1", fontWeight: 500, fontSize: "15px", cursor: "pointer", textAlign: "center" },
   customHead: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "-8px" },
   customClose: { background: "none", border: "none", color: "#2E0A14", fontSize: "1.75rem", lineHeight: 1, cursor: "pointer", minWidth: "44px", minHeight: "44px", marginRight: "-12px" },
   customHint: { color: "#2E0A14", fontSize: "16px", fontWeight: 400, lineHeight: 1.4, maxWidth: "420px" },
   customError: { color: "#7A1631", fontSize: "15px" },
-  startBtn: { height: "64px", marginTop: "16px", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 24px", border: "none", background: "#7A1631", color: "#F3ECE1", fontWeight: 500, fontSize: "20px", cursor: "pointer", textAlign: "left" },
+  startBtn: { height: "64px", marginTop: "16px", display: "flex", alignItems: "center", justifyContent: "center", padding: "0 24px", border: "none", background: "#7A1631", color: "#F3ECE1", fontWeight: 500, fontSize: "20px", cursor: "pointer", textAlign: "center" },
 };

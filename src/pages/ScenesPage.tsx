@@ -102,15 +102,15 @@ export function ScenesPage() {
     return () => ro.disconnect();
   }, [selected?.id]);   // the panel appears once the data has loaded, and changes with the scene
 
-  // Phones: the heading sits a quarter of the way down the screen, so the world starts lower than centred, a
-  // seventh of the map's height down, leaving the heading clear. Once, at the first measure, and only while the view
+  // Phones: the heading sits low (three quarters down the screen), so the world starts higher than centred, a
+  // seventh of the map's height up, leaving the heading clear. Once, at the first measure, and only while the view
   // is still the starting one. (Wide screens: centred; the heading may overlap the dots.)
   const dropped = useRef(false);
   useEffect(() => {
     if (dropped.current || size.w === 0 || !window.matchMedia("(max-width: 640px)").matches) return;
     dropped.current = true;
-    const down = size.h / 7;
-    setView((v) => (v === HOME ? { ...HOME, cy: HOME.cy - down * viewBox(HOME, size.w, size.h).unitsPerPx } : v));
+    const up = size.h / 7;
+    setView((v) => (v === HOME ? { ...HOME, cy: HOME.cy + up * viewBox(HOME, size.w, size.h).unitsPerPx } : v));
   }, [size.w, size.h]);
 
   const vb = viewBox(view, size.w, size.h);

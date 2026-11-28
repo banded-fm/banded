@@ -301,13 +301,15 @@ input[type="checkbox"] { accent-color: var(--maroon); }
   /* Intros the size of the other pages' titles on phones (Proximity, Upcoming) */
   .graph-empty-text { font-size: 56px !important; line-height: 0.86 !important; letter-spacing: -0.065em !important; }
   /* Play's start screen (Swiss-M-Play-Start): one column, the title in maroon, the ends on a 2px rule */
-  .play-start.page-container { flex-direction: column !important; align-items: stretch !important; justify-content: flex-start !important; gap: 0 !important; padding: 20px 16px 16px !important; }
+  .play-start.page-container { flex-direction: column !important; align-items: stretch !important; justify-content: flex-start !important; gap: 0 !important; padding: 20px 16px max(16px, env(safe-area-inset-bottom)) !important; }
   .play-start-title { font-size: 60px !important; line-height: 0.88 !important; letter-spacing: -0.065em !important; color: var(--maroon) !important; }
-  .play-start-ends { margin-top: 20px !important; }
+  .play-start-ends { margin-top: 20px !important; flex: none !important; }
   .play-start-line { width: 100% !important; height: 40px !important; margin-top: 12px !important; }
-  .play-start-par { font-size: 18px !important; margin-top: 14px !important; }
-  .play-start-row { flex-direction: column !important; align-items: stretch !important; gap: 0 !important; }
-  .play-start-actions { flex: none !important; margin-top: 28px; gap: 12px !important; }
+  .play-start-par { font-size: 32px !important; margin-top: 24px !important; }
+  .play-start-row { flex-direction: column !important; align-items: stretch !important; gap: 0 !important; flex: 1 0 auto; }
+  /* Start game right under Par; Today's / Random / Custom at the bottom of the screen, above the footer (when there's room) */
+  .play-start-actions { flex: 1 0 auto !important; margin-top: 28px; gap: 12px !important; }
+  .play-start-more { margin-top: auto; }
   .start-game-btn { height: 56px !important; font-size: 17px !important; }
   .graph-legend[open] { z-index: 210 !important; }
   .graph-legend-body { z-index: 210 !important; }
@@ -500,7 +502,8 @@ input[type="checkbox"] { accent-color: var(--maroon); }
   .play-moves { order: 4; width: 100%; }
   .game-buttons { order: 6; width: 100%; }
   /* Spacing from the design's phone Play screen: the title alone, then the blocks close together */
-  .play-page.page-container { padding-top: 14px !important; gap: 0 !important; }
+  /* The same bottom margin as the start screen, so the buttons at the bottom don't move when the game starts */
+  .play-page.page-container { padding-top: 14px !important; padding-bottom: max(16px, env(safe-area-inset-bottom)) !important; gap: 0 !important; }
   .play-page .play-title { font-size: 34px !important; }
   .play-head .eyebrow, .play-head p { display: none; }
   .play-error, .endpoints-card { margin-top: 12px; }
@@ -516,10 +519,10 @@ input[type="checkbox"] { accent-color: var(--maroon); }
   /* Connection rows (and their loading skeletons): a fixed 36px, the name on one line, a smaller tag */
   .play-moves .move-item { height: 36px !important; min-height: 0 !important; gap: 10px !important; line-height: 1.15; }
   .play-moves .move-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .play-moves .move-rel { font-size: 10.5px !important; letter-spacing: 0.06em !important; padding-right: 0 !important; }
-  .play-moves .move-arrow { font-size: 16px !important; padding-right: 8px !important; }
-  .game-buttons { margin-top: 14px; gap: 10px !important; }
-  .game-buttons button { height: 44px !important; }
+  .play-moves .move-rel { font-size: 10.5px !important; letter-spacing: 0.06em !important; padding-right: 8px !important; }
+  /* At the bottom of the screen (above the footer) when the game is shorter than it; 14px below it otherwise */
+  .game-buttons { margin-top: auto; padding-top: 14px; gap: 12px !important; }
+  .game-buttons button { height: 48px !important; }   /* as on the start screen */
   /* Start on the left, Par, End on the right (useFitEndpoints sizes the names) */
   .endpoints-card { gap: 8px 12px !important; justify-content: space-between; }
   .endpoint-end { text-align: right; align-items: flex-end; }
@@ -641,12 +644,13 @@ input[type="checkbox"] { accent-color: var(--maroon); }
     top: auto;
     max-height: 55%;
   }
-  /* Its middle about a quarter of the way down the screen (the 56px nav bar above the map) */
+  /* Low on the screen, its middle about three quarters of the way down (the 56px nav bar above the map), clear of
+     the map's buttons on the right */
   .scenes-heading {
-    top: calc(25dvh - 56px) !important;
+    top: calc(75dvh - 56px) !important;
     transform: translateY(-50%);
     left: 16px !important;
-    right: 16px;
+    right: 72px;
     font-size: 56px !important;
     line-height: 0.86 !important;
     letter-spacing: -0.065em !important;
@@ -666,7 +670,7 @@ input[type="checkbox"] { accent-color: var(--maroon); }
   .info-panel, .scene-panel, .graph-legend-body, .sheet-scrim { animation: none !important; }
 }
 
-/* The narrowest phones: the Map heading a size down, so it stays three lines, clear of the world below it */
+/* The narrowest phones: the Map heading a size down, so it stays three lines above the footer */
 @media (max-width: 360px) {
   .scenes-heading { font-size: 44px !important; }
 }
@@ -676,7 +680,7 @@ input[type="checkbox"] { accent-color: var(--maroon); }
 /* Play on phones, in a game: the same for the buttons under it (two to a row, Today's puzzle on its own above them),
    so their labels stay on one line */
 @media (max-width: 640px) {
-  .game-buttons > button { flex: 1 1 calc(50% - 5px); min-width: 0; padding-left: 10px !important; padding-right: 10px !important; white-space: nowrap; }
+  .game-buttons > button { flex: 1 1 calc(50% - 6px); min-width: 0; padding-left: 10px !important; padding-right: 10px !important; white-space: nowrap; }
   .game-buttons > button:first-child:nth-last-child(3) { flex-basis: 100%; }
 }
 
@@ -714,4 +718,32 @@ input[type="checkbox"] { accent-color: var(--maroon); }
 .sheet-scrim-closing, .legend-closing .sheet-scrim { animation: scrim-out 0.24s ease-in forwards !important; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) {
   .sheet-closing, .legend-closing .graph-legend-body, .sheet-scrim-closing, .legend-closing .sheet-scrim { animation: none !important; }
+}
+
+/* Proximity and Upcoming on wide screens: a row opens in place, its details growing open beneath it (and closing
+   the same way: useLingering keeps them while they shrink) */
+.row-expand { display: grid; grid-template-rows: 1fr; animation: row-open 0.32s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.row-expand.row-collapsing { animation: row-close 0.24s cubic-bezier(0.4, 0, 1, 1) forwards; }
+.row-expand-inner { overflow: hidden; min-height: 0; }
+@keyframes row-open { from { grid-template-rows: 0fr; opacity: 0; } }
+@keyframes row-close { to { grid-template-rows: 0fr; opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .row-expand, .row-expand.row-collapsing { animation: none; }
+}
+
+/* Play's share dialog on phones: a bottom sheet like the others (the 8px band on top, rising in, sliding away:
+   ShareDialog adds .sheet-closing), not a floating card */
+@media (max-width: 640px) {
+  .share-dialog {
+    margin: auto 0 0 !important; width: 100% !important; max-width: 100% !important;
+    border: none !important; border-top: 8px solid var(--deep) !important; box-shadow: none !important;
+    max-height: 85dvh; overflow-y: auto !important;
+    animation: sheet-up 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .share-dialog > div { padding: 20px 16px max(24px, env(safe-area-inset-bottom)) !important; }
+  .share-dialog::backdrop { animation: scrim-in 0.25s ease-out; }
+  .share-dialog.sheet-closing::backdrop { animation: scrim-out 0.24s ease-in forwards; }
+}
+@media (max-width: 640px) and (prefers-reduced-motion: reduce) {
+  .share-dialog, .share-dialog::backdrop { animation: none !important; }
 }

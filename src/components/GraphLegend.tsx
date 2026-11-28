@@ -131,10 +131,10 @@ const styles: Record<string, React.CSSProperties> = {
     background: "#F3ECE1", border: "2px solid #2E0A14", color: "#2E0A14", fontSize: "14px",
   },
   summary: {
-    display: "flex", alignItems: "center", gap: "12px", height: "44px", padding: "0 18px",
+    display: "flex", alignItems: "center", justifyContent: "center", gap: "12px", height: "44px", padding: "0 18px",
     cursor: "pointer", fontSize: "15px", fontWeight: 500, color: "#2E0A14", userSelect: "none", listStyle: "none",
   },
-  sign: { marginLeft: "auto", fontSize: "20px", lineHeight: 1 },
+  sign: { fontSize: "20px", lineHeight: 1 },
   section: { display: "flex", flexDirection: "column", padding: "0 18px" },
   row: { display: "flex", alignItems: "center", gap: "14px", padding: "8px 0", borderTop: "1px solid #D8CBBB", cursor: "pointer" },
   text: { display: "flex", flexDirection: "column", lineHeight: 1.25, fontSize: "15px" },

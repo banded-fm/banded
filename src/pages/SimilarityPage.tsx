@@ -1,7 +1,8 @@
 import { SwissLine } from "../components/SwissLine";
+import { PHONE, useMediaQuery } from "../components/useMediaQuery";
 import { useLingering } from "../components/useLingering";
 import { SheetScrim } from "../components/SheetScrim";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { computeSimilarity, mergePairs, MIN_STRENGTH, pendingPairs, type PairScore, type SimilarityResult } from "./similarity";
 import { panelStyles, PathSteps, scoreColor, scoreFormula } from "../components/ConnectionPath";
 import { buildTieredGraphAccess } from "./tieredGraphAccess";
@@ -54,8 +55,12 @@ export function SimilarityPage() {
   useEffect(() => {
     if (hasResult) resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [hasResult]);
-  // The pair's sheet stays a moment after closing, to slide away (phones)
-  const [sheetPair, sheetClosing] = useLingering(openPair);
+  // Phones: the pair opens in a bottom sheet (kept a moment after closing, to slide away). Wide screens: its row
+  // opens in place, its details growing open beneath it (and shrinking away).
+  const isPhone = useMediaQuery(PHONE);
+  const [sheetPair, sheetClosing] = useLingering(isPhone ? openPair : null);
+  const [rowPair, rowClosing] = useLingering(isPhone ? null : openPair, { phoneOnly: false });
+  const pairKey = (p: PairScore) => p.node?.id ?? p.name;
   const isSearching = (p: PairScore) => p.node !== undefined && searching.has(p.node.id);
 
   // Escape closes the connection panel.
@@ -267,22 +272,31 @@ export function SimilarityPage() {
                   )}
                 </>
               );
+              const isOpen = !!openPair && pairKey(openPair) === pairKey(p);
               return p.found ? (
-                <button
-                  key={`${p.name}-${i}`}
-                  type="button"
-                  className="pair-card"
-                  style={{
-                    ...styles.pairCard,
-                    ...styles.pairButton,
-                    ...(i === 0 ? styles.firstRow : {}),
-                  }}
-                  onClick={() => setOpenPair(p)}
-                  aria-expanded={openPair === p}
-                  aria-controls="connection-panel"
-                >
-                  {card}
-                </button>
+                <Fragment key={`${p.name}-${i}`}>
+                  <button
+                    type="button"
+                    className="pair-card"
+                    style={{
+                      ...styles.pairCard,
+                      ...styles.pairButton,
+                      ...(i === 0 ? styles.firstRow : {}),
+                    }}
+                    onClick={() => setOpenPair(isOpen ? null : p)}
+                    aria-expanded={isOpen}
+                    aria-controls="connection-panel"
+                  >
+                    {card}
+                  </button>
+                  {rowPair && pairKey(rowPair) === pairKey(p) && (
+                    <div className={`row-expand${rowClosing ? " row-collapsing" : ""}`}>
+                      <div className="row-expand-inner">
+                        <ConnectionPanel inline pair={rowPair} result={result} searching={isSearching(rowPair)} onClose={() => setOpenPair(null)} />
+                      </div>
+                    </div>
+                  )}
+                </Fragment>
               ) : (
                 <div key={`${p.name}-${i}`} style={{ ...styles.pairCard, ...(i === 0 ? styles.firstRow : {}) }}>{card}</div>
               );
@@ -310,23 +324,27 @@ function ConnectionPanel({
   searching,
   onClose,
   closing = false,
+  inline = false,
 }: {
   closing?: boolean;
+  /** Wide screens: in its row, beneath it (no close button or title: the row is both) */
+  inline?: boolean;
   pair: PairScore;
   result: SimilarityResult;
   searching: boolean;
   onClose: () => void;
 }) {
   const path = pair.path;
+  const Box = inline ? "div" : "aside";
   return (
-    <aside id="connection-panel" className={`info-panel${closing ? " sheet-closing" : ""}`} style={panelStyles.panel} aria-label="How they connect">
-      <div style={panelStyles.header}>
+    <Box id="connection-panel" className={inline ? undefined : `info-panel${closing ? " sheet-closing" : ""}`} style={inline ? panelStyles.inline : panelStyles.panel} aria-label="How they connect">
+      {!inline && <div style={panelStyles.header}>
         <span style={{ ...panelStyles.badge, background: scoreColor(pair.score) }}>{pair.score}/100</span>
         <button onClick={onClose} className="info-close" style={panelStyles.close} aria-label="Close panel">
           ×
         </button>
-      </div>
-      <h2 style={panelStyles.title}>{pair.name} → {result.targetName}</h2>
+      </div>}
+      {!inline && <h2 style={panelStyles.title}>{pair.name} → {result.targetName}</h2>}
       <section style={panelStyles.section}>
         {path == null ? (
           <p style={panelStyles.muted}>{searching ? "Looking for the closest connection…" : "No connection within 6 hops."}</p>
@@ -341,7 +359,7 @@ function ConnectionPanel({
         <h3 style={panelStyles.heading}>Score</h3>
         <p style={panelStyles.muted}>{scoreFormula(pair, MIN_STRENGTH)}</p>
       </section>
-    </aside>
+    </Box>
   );
 }
 
@@ -362,7 +380,8 @@ const styles: Record<string, React.CSSProperties> = {
   chipList: { display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "10px" },
   chip: { display: "flex", alignItems: "center", gap: "6px", height: "36px", padding: "0 6px 0 14px", border: "2px solid #2E0A14", color: "#2E0A14", fontSize: "15px", letterSpacing: "-0.01em" },
   chipRemove: { background: "none", border: "none", color: "#2E0A14", cursor: "pointer", fontSize: "18px", lineHeight: 1, padding: "0 4px" },
-  searchBtn: { height: "60px", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 24px", border: "none", background: "#7A1631", color: "#F3ECE1", fontWeight: 500, fontSize: "18px", letterSpacing: "-0.01em", cursor: "pointer", textAlign: "left" },
+  // Its label centred (with the spinner beside it while scoring)
+  searchBtn: { height: "60px", display: "flex", alignItems: "center", justifyContent: "center", gap: "12px", padding: "0 24px", border: "none", background: "#7A1631", color: "#F3ECE1", fontWeight: 500, fontSize: "18px", letterSpacing: "-0.01em", cursor: "pointer", textAlign: "center" },
   error: { color: "#7A1631", fontSize: "15px" },
   noResults: { color: "#2E0A14", fontSize: "15px", fontWeight: 400 },
   results: { width: "100%" },

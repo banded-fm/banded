@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { SHEET_CLOSE_MS } from "./useLingering";
 
 interface Props {
   open: boolean;
@@ -43,8 +44,15 @@ export function ShareDialog({ open, onClose, title, summary, text }: Props) {
   useEffect(() => {
     const d = ref.current;
     if (!d) return;
-    if (open && !d.open) { setCopied(null); d.showModal?.(); }
-    if (!open && d.open) d.close();
+    if (open && !d.open) { setCopied(null); d.classList.remove("sheet-closing"); d.showModal?.(); }
+    if (!open && d.open) {
+      // Phones: it's a bottom sheet (index.css), which slides away before it closes
+      const slide = window.matchMedia("(max-width: 640px)").matches && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (!slide) { d.close(); return; }
+      d.classList.add("sheet-closing");
+      const t = setTimeout(() => { d.close(); d.classList.remove("sheet-closing"); }, SHEET_CLOSE_MS);
+      return () => clearTimeout(t);
+    }
   }, [open]);
 
   // "Copied!" goes back to "Copy" after a few seconds, so it can be copied again.
@@ -76,7 +84,8 @@ export function ShareDialog({ open, onClose, title, summary, text }: Props) {
         <div style={styles.buttons}>
           {canShare && <button type="button" onClick={share} style={styles.primary}>Share</button>}
           <button type="button" onClick={copy} style={canShare ? styles.secondary : styles.primary}>
-            {copied === "yes" ? "Copied!" : "Copy"}
+            <span>{copied === "yes" ? "Copied!" : "Copy"}</span>
+            <CopyIcon />
           </button>
         </div>
         <p role="status" style={copied === "no" ? styles.error : styles.status} hidden={!copied}>
@@ -84,6 +93,16 @@ export function ShareDialog({ open, onClose, title, summary, text }: Props) {
         </p>
       </div>
     </dialog>
+  );
+}
+
+/** Two overlapping squares (the design's copy icon), in the button's colour. */
+function CopyIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true" style={{ flex: "none" }}>
+      <rect x="7" y="7" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2" />
+      <path d="M13 7V2H2v11h5" fill="none" stroke="currentColor" strokeWidth="2" />
+    </svg>
   );
 }
 
@@ -96,8 +115,8 @@ const styles: Record<string, React.CSSProperties> = {
   summary: { color: "#2E0A14", fontSize: "18px", fontWeight: 400 },
   text: { marginTop: "8px", padding: "18px 20px", border: "2px solid #2E0A14", color: "#2E0A14", fontSize: "17px", fontWeight: 400, lineHeight: 1.55, textAlign: "left", whiteSpace: "pre-wrap", overflowWrap: "anywhere", userSelect: "text" },
   buttons: { display: "flex", gap: "12px", marginTop: "8px" },
-  primary: { flex: 1, height: "60px", border: "none", background: "#7A1631", color: "#F3ECE1", fontWeight: 500, fontSize: "18px", cursor: "pointer", textAlign: "left", padding: "0 24px" },
-  secondary: { flex: 1, height: "60px", border: "2px solid #2E0A14", background: "transparent", color: "#2E0A14", fontWeight: 500, fontSize: "18px", cursor: "pointer", textAlign: "left", padding: "0 24px" },
+  primary: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", height: "60px", border: "none", background: "#7A1631", color: "#F3ECE1", fontWeight: 500, fontSize: "18px", cursor: "pointer", textAlign: "center", padding: "0 24px" },
+  secondary: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", height: "60px", border: "2px solid #2E0A14", background: "transparent", color: "#2E0A14", fontWeight: 500, fontSize: "18px", cursor: "pointer", textAlign: "center", padding: "0 24px" },
   status: { color: "#6B4A50", fontSize: "14px", fontWeight: 400 },
   error: { color: "#7A1631", fontSize: "14px" },
 };

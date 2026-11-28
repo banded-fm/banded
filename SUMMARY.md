@@ -132,9 +132,10 @@ Game mode (Six Degrees of Music):
                   take the same colours as the shared squares
     Hint         → colours the connections at this position by distance (once per position,
                   saved with the game); a step picked from a hinted list shares as ❓ then its square
-    Give up      → "Give up and reveal": "You gave up!" where a win's result goes, the par (or
-                  shortest) path and a Share button
+    Give up      → "Give up and reveal": "You gave up!" where a win's result goes, a Share button
     Win          → the last step is the end artist (by ID): the list gives way to the result
+    Game over    → after a win or giving up, "Banded's path" (the par path, or the shortest for a custom
+                  game) shows below Share result. The share dialog is a bottom sheet on phones; Copy has a copy icon
 
 Similarity mode (artist-to-scene fit scoring):
     User enters a list of artists + one target artist to compare
@@ -177,7 +178,7 @@ Similarity mode (artist-to-scene fit scoring):
           lift it, weak ones never lower it (BONUS_THRESHOLD / BONUS_SHARE)
         → Fully client-side; no backend. Weights are placeholders, tunable in similarity.ts
         → Tapping a breakdown card opens a panel for that pair, styled like Explore's node
-          panel (.info-panel: sidebar on desktop, bottom sheet on phones): the pair's
+          panel (on wide screens the row opens in place, growing open beneath it; a bottom sheet on phones): the pair's
           score, the strongest path as sentences read along each edge's direction
           ("Ty Segall is a member of Fuzz"; relationSentence in graph/relationships.ts)
           with each hop's weight, and the product that makes the score
@@ -217,8 +218,8 @@ Discover (upcoming concert recommendations, streamed: concertSearch.ts streamCon
           Germany: 300 of 592 concerts · scoring 64 artists…"); Stop (or a new search,
           or leaving the page) ends the run
         → Cards: headliner + score, "Support from: ..." (the rest of the bill), date ·
-          venue. Tapping one opens ConcertPanel (Explore's .info-panel: sidebar on
-          desktop, bottom sheet on phones): the strongest path from each liked artist
+          venue. Tapping one opens ConcertPanel (the row opens in place on wide
+          screens; a bottom sheet on phones): the strongest path from each liked artist
           (the pairs kept with each HeadlinerScore), best first, with the same hop
           sentences, weights and formula as Similarity's panel (components/ConnectionPath.tsx)
         → Artists not in the graph score 0, shown but ranked last (flagged)
@@ -307,6 +308,7 @@ src/
 │   ├── SearchBar.tsx     — Search input, expand, reset. Responsive layout.
 │   ├── SelectMenu.tsx    — A styled pick-one menu (the Map's "Go to a city"): keyboard and type-ahead; a native select on touch screens.
 │   ├── SheetScrim.tsx    — Phones: the dim layer behind every bottom sheet (artist, connection, concert, scene panels and the legend); a tap closes the sheet. Sheets rise in and the scrim fades in (index.css), and slide away when closed.
+│   ├── useMediaQuery.ts  — useMediaQuery / PHONE: whether the phone layout applies, kept up to date.
 │   ├── useLingering.ts   — Keeps a closed bottom sheet on screen for its slide-away (SHEET_CLOSE_MS); phones only unless asked (Play's custom game).
 │   ├── SwissLine.tsx     — The design's zigzag line, drawing itself in on a loop (still with reduced motion); About, Proximity, Upcoming, and three crossing lines (`layered`) on the empty graph.
 │   ├── GraphView.tsx     — Force-directed 2D graph canvas. A person is a filled dot, a group a cluster of three (1.8x a person's width); not yet expanded = dashed outlines.
