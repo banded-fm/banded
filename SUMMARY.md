@@ -119,6 +119,7 @@ Game mode (Six Degrees of Music):
                   screen; user picks any two connected artists/bands (no same-type requirement);
                   par = shortest path hops over all links (a listed pair keeps its listed par)
     Shared game → URL params (?start=<mbid>&end=<mbid>) load the exact same puzzle;
+                  today's puzzle shares plain banded.fm/#/play instead (it opens on the day's puzzle);
                   the share icon (a square button after Undo and Hint, under the path; Apple's symbol on Apple devices,
                   Material's three dots elsewhere) opens a share dialog: the puzzle's MBID-based
                   link (avoids name ambiguity), or once won (the dialog opens by itself then) a
