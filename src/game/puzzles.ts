@@ -57,6 +57,11 @@ function ymd(date: string): [number, number, number] {
   return [y, m - 1, d];
 }
 
+/** The daily puzzle's number for a date: #1 on DAILY_START, counting up a day at a time. */
+export function puzzleNumber(date: string): number {
+  return dayNumber(date) + 1;
+}
+
 /** The puzzle for a date (today by default). Dates before DAILY_START count back from the end. */
 export function dailyPuzzle(date: string = localDate()): Puzzle {
   const n = PUZZLES.length;

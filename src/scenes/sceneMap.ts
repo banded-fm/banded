@@ -50,21 +50,21 @@ export interface PlacedScene extends Scene {
   lon: number;
 }
 
-const GREY = [128, 128, 128];
-const GREEN = [46, 204, 113];
-/** A colour from grey (t = 0) to green (t = 1). */
+const ROSE = [221, 174, 166];
+const MAROON = [122, 22, 49];
+/** A colour from rose (t = 0) to maroon (t = 1). */
 export function eraGradient(t: number): string {
-  const c = GREY.map((g, i) => Math.round(g + (GREEN[i]! - g) * Math.min(1, Math.max(0, t))));
+  const c = ROSE.map((g, i) => Math.round(g + (MAROON[i]! - g) * Math.min(1, Math.max(0, t))));
   return `#${c.map((x) => x.toString(16).padStart(2, "0")).join("")}`;
 }
 
-/** Decade buckets for the filter and the colours: before 1960, the 60s ... the 00s, 2010 on; grey (oldest) to
- * green (newest). */
+/** Decade buckets for the filter and the colours: before 1960, the 60s ... the 00s, 2010 on; rose (oldest) to
+ * maroon (newest). */
 export const DECADES: { start: number; label: string; color: string }[] = [
   [1950, "Before 1960"], [1960, "1960s"], [1970, "1970s"], [1980, "1980s"], [1990, "1990s"], [2000, "2000s"],
   [2010, "2010 on"],
 ].map(([start, label], i, all) => ({ start: start as number, label: label as string, color: eraGradient(i / (all.length - 1)) }));
-const NO_ERA_COLOR = "#4a4a4a";
+const NO_ERA_COLOR = "#B9A9A0";
 
 /** The decade bucket of a scene's peak year, or null without an era. */
 export function decadeOf(scene: Scene): number | null {

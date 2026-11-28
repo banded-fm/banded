@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import type { GraphNode } from "../graph/types";
-import { NODE_COLORS } from "../graph/types";
 import { getArtistDetails, getDb, isDbLoaded, type ArtistDetails } from "../db/graphDb";
 
 interface Props {
@@ -12,6 +11,8 @@ interface Props {
   busy?: boolean;
   onExpand?: () => void;
   onUnexpand?: () => void;
+  /** Sliding away (phones): see useLingering. */
+  closing?: boolean;
 }
 
 /** Names the graph's legend uses for the two artist node types. */
@@ -52,16 +53,16 @@ function TrashIcon() {
   );
 }
 
-export function InfoPanel({ node, onClose, expanded = false, busy = false, onExpand, onUnexpand }: Props) {
+export function InfoPanel({ node, onClose, expanded = false, busy = false, onExpand, onUnexpand, closing = false }: Props) {
   const details = useArtistDetails(node);
   const loaded = details !== "loading" ? details : null;
   // A node made before details existed may carry its own disambiguation.
   const disambiguation = loaded?.disambiguation ?? (node.type === "artist" ? node.disambiguation : undefined);
 
   return (
-    <aside className="info-panel" style={styles.panel} aria-label="Node details">
+    <aside className={`info-panel${closing ? " sheet-closing" : ""}`} style={styles.panel} aria-label="Node details">
       <div style={styles.header}>
-        <span style={{ ...styles.badge, background: NODE_COLORS[node.type] }}>
+        <span className="eyebrow" style={styles.badge}>
           {TYPE_LABELS[node.type] ?? node.type}
         </span>
         <button onClick={onClose} className="info-close" style={styles.closeBtn} aria-label="Close panel">
@@ -130,7 +131,7 @@ export function InfoPanel({ node, onClose, expanded = false, busy = false, onExp
       )}
       {node.metadata && Object.keys(node.metadata).length > 0 && (
         <details style={{ marginTop: "0.75rem" }}>
-          <summary style={{ cursor: "pointer", color: "#888" }}>Raw metadata</summary>
+          <summary style={{ cursor: "pointer", color: "#6B4A50" }}>Raw metadata</summary>
           <pre style={styles.pre}>{JSON.stringify(node.metadata, null, 2)}</pre>
         </details>
       )}
@@ -139,12 +140,13 @@ export function InfoPanel({ node, onClose, expanded = false, busy = false, onExp
 }
 
 const styles: Record<string, React.CSSProperties> = {
+  // A 2px deep rule on top (inset from the edges on wide screens: index.css); the type as an eyebrow, the name large in maroon
   panel: {
-    width: "280px",
+    width: "320px",
     maxWidth: "100%",
-    padding: "1rem",
-    background: "#1a1a1a",
-    borderLeft: "1px solid #2a2a2a",
+    padding: "16px 24px 20px",
+    background: "#F3ECE1",
+    borderTop: "2px solid #2E0A14", // a rule on top only, no divider down the side
     overflowY: "auto",
   },
   header: {
@@ -153,38 +155,36 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     marginBottom: "0.5rem",
   },
-  badge: {
-    padding: "2px 8px",
-    borderRadius: "3px",
-    fontSize: "0.75rem",
-    fontWeight: 600,
-    color: "#000",
-    textTransform: "uppercase",
-  },
+  badge: {},
   closeBtn: {
     background: "none",
     border: "none",
-    color: "#888",
-    fontSize: "1.5rem",
+    color: "#2E0A14",
+    fontSize: "1.75rem",
     cursor: "pointer",
     lineHeight: 1,
   },
   name: {
-    fontSize: "1.2rem",
-    fontWeight: 600,
+    fontSize: "40px",
+    fontWeight: 500,
+    lineHeight: 0.95,
+    letterSpacing: "-0.055em",
+    color: "#7A1631",
     marginBottom: 0,
     overflowWrap: "anywhere",
   },
   disambiguation: {
-    color: "#bbb",
-    fontSize: "0.9rem",
-    marginTop: "0.2rem",
+    color: "#2E0A14",
+    fontSize: "15px",
+    fontWeight: 400,
+    lineHeight: 1.45,
+    marginTop: "8px",
   },
   // The bin: the + inverted (outline), so removing reads as the opposite of adding.
   iconBtnRemove: {
     background: "transparent",
-    color: "#ff6b6b",
-    boxShadow: "inset 0 0 0 1.5px #ff6b6b",
+    color: "#7A1631",
+    boxShadow: "inset 0 0 0 2px #7A1631",
   },
   titleRow: {
     display: "flex",
@@ -202,14 +202,13 @@ const styles: Record<string, React.CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    width: "32px",
-    height: "32px",
+    width: "44px",
+    height: "44px",
     padding: 0,
-    borderRadius: "4px",
     border: "none",
-    background: "#ff6b6b",
-    color: "#fff",
-    fontWeight: 700,
+    background: "#7A1631",
+    color: "#F3ECE1",
+    fontWeight: 500,
     fontSize: "1.2rem",
     lineHeight: 1,
     cursor: "pointer",
@@ -223,34 +222,33 @@ const styles: Record<string, React.CSSProperties> = {
     margin: "0 0 0.75rem",
   },
   genre: {
-    padding: "0.15rem 0.55rem",
-    borderRadius: "10px",
-    border: "1px solid #3a3a3a",
-    background: "#242424",
-    color: "#ddd",
-    fontSize: "0.78rem",
+    padding: "3px 8px",
+    border: "2px solid #2E0A14",
+    color: "#2E0A14",
+    fontSize: "13px",
   },
   link: {
     display: "inline-flex",
     alignItems: "center",
-    color: "#48dbfb",
-    fontSize: "0.85rem",
-    textDecoration: "none",
+    color: "#7A1631",
+    fontSize: "15px",
+    textDecoration: "underline",
+    textUnderlineOffset: "3px",
   },
   muted: {
-    color: "#777",
+    color: "#6B4A50",
     fontSize: "0.8rem",
     marginBottom: "0.6rem",
   },
   meta: {
-    color: "#aaa",
+    color: "#6B4A50",
     fontSize: "0.85rem",
     marginBottom: "0.25rem",
   },
   pre: {
     fontSize: "0.7rem",
-    color: "#888",
-    background: "#0f0f0f",
+    color: "#6B4A50",
+    background: "#F3ECE1",
     padding: "0.5rem",
     borderRadius: "4px",
     overflow: "auto",

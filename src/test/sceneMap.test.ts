@@ -33,15 +33,15 @@ describe("scene map helpers", () => {
     expect(decadeOf(scene("a", { era: { from: 2015, to: 2024, peak: 2020, label: "" } }))).toBe(2010);
     expect(decadeOf(scene("a", { era: null }))).toBeNull();
     expect(colorFor(scene("a"))).toBe(DECADES.find((d) => d.start === 1980)!.color);
-    expect(colorFor(scene("a", { era: null }))).toBe("#4a4a4a");
+    expect(colorFor(scene("a", { era: null }))).toBe("#B9A9A0");
   });
 
-  it("colours eras from grey (oldest) to green (newest)", () => {
-    expect(eraGradient(0)).toBe("#808080");
-    expect(eraGradient(1)).toBe("#2ecc71");
-    expect(eraGradient(0.5)).toBe("#57a679");
-    expect(DECADES[0]!.color).toBe("#808080");
-    expect(DECADES[DECADES.length - 1]!.color).toBe("#2ecc71");
+  it("colours eras from rose (oldest) to maroon (newest)", () => {
+    expect(eraGradient(0)).toBe("#ddaea6");
+    expect(eraGradient(1)).toBe("#7a1631");
+    expect(eraGradient(0.5)).toBe("#ac626c");
+    expect(DECADES[0]!.color).toBe("#ddaea6");
+    expect(DECADES[DECADES.length - 1]!.color).toBe("#7a1631");
     expect(new Set(DECADES.map((d) => d.color)).size).toBe(DECADES.length);
   });
 

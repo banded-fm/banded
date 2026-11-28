@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { SceneGraph } from "../graph/SceneGraph";
 import { DEFAULT_EXPLORE_RELS, EXPLORE_RELATIONSHIPS } from "../graph/relationships";
 import { EDGE_COLORS, type EdgeType } from "../graph/types";
+import { edgeMark } from "../graph/marks";
 
 function graph() {
   const g = new SceneGraph();
@@ -81,8 +82,10 @@ describe("legend", () => {
     expect(DEFAULT_EXPLORE_RELS).toEqual(["member_of", "former_member_of", "support_musician"]);
   });
 
-  it("gives every relationship type its own colour", () => {
-    const colors = EXPLORE_RELATIONSHIPS.map((r) => EDGE_COLORS[r.type]);
-    expect(new Set(colors).size).toBe(colors.length);
+  it("gives every relationship type its own mark (hue and stroke pattern together)", () => {
+    const marks = EXPLORE_RELATIONSHIPS.map((r) => JSON.stringify(edgeMark(r.type)));
+    expect(new Set(marks).size).toBe(marks.length);
+    // and the plain hue map agrees with the marks
+    for (const r of EXPLORE_RELATIONSHIPS) expect(EDGE_COLORS[r.type]).toBe(edgeMark(r.type).color);
   });
 });

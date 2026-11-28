@@ -88,15 +88,16 @@ export function ShareDialog({ open, onClose, title, summary, text }: Props) {
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  dialog: { margin: "auto", padding: 0, border: "1px solid #333", borderRadius: "12px", background: "#1a1a1a", color: "#e0e0e0", width: "min(360px, calc(100vw - 2rem))", maxWidth: "none" },
-  body: { position: "relative", display: "flex", flexDirection: "column", gap: "0.75rem", padding: "1.25rem", textAlign: "center" },
-  close: { position: "absolute", top: "0.25rem", right: "0.25rem", width: "44px", height: "44px", border: "none", background: "transparent", color: "#888", fontSize: "1.5rem", cursor: "pointer" },
-  title: { fontSize: "1.2rem", fontWeight: 700, color: "#fff", margin: "0 2rem" },
-  summary: { color: "#888", fontSize: "0.9rem" },
-  text: { padding: "0.75rem", borderRadius: "8px", border: "1px solid #333", background: "#111", color: "#e0e0e0", fontSize: "0.9rem", lineHeight: 1.5, textAlign: "left", whiteSpace: "pre-wrap", overflowWrap: "anywhere", userSelect: "text" },
-  buttons: { display: "flex", gap: "0.5rem" },
-  primary: { flex: 1, minHeight: "44px", borderRadius: "6px", border: "none", background: "#ff6b6b", color: "#fff", fontWeight: 600, fontSize: "1rem", cursor: "pointer" },
-  secondary: { flex: 1, minHeight: "44px", borderRadius: "6px", border: "1px solid #48dbfb", background: "transparent", color: "#48dbfb", fontWeight: 600, fontSize: "1rem", cursor: "pointer" },
-  status: { color: "#888", fontSize: "0.85rem" },
-  error: { color: "#ff6b6b", fontSize: "0.85rem" },
+  // A paper card on a 2px deep border with a hard shadow; the title large in maroon, flush left
+  dialog: { margin: "auto", padding: 0, border: "2px solid #2E0A14", boxShadow: "8px 8px 0 #2E0A14", background: "#F3ECE1", color: "#2E0A14", width: "min(600px, calc(100vw - 2rem))", maxWidth: "none", overflow: "visible" },
+  body: { position: "relative", display: "flex", flexDirection: "column", gap: "14px", padding: "28px 32px 32px", textAlign: "left" },
+  close: { position: "absolute", top: "12px", right: "12px", width: "44px", height: "44px", border: "none", background: "transparent", color: "#2E0A14", fontSize: "30px", cursor: "pointer" },
+  title: { fontSize: "clamp(36px, 7vw, 56px)", fontWeight: 500, lineHeight: 0.95, letterSpacing: "-0.06em", color: "#7A1631", margin: "0 48px 0 0" },
+  summary: { color: "#2E0A14", fontSize: "18px", fontWeight: 400 },
+  text: { marginTop: "8px", padding: "18px 20px", border: "2px solid #2E0A14", color: "#2E0A14", fontSize: "17px", fontWeight: 400, lineHeight: 1.55, textAlign: "left", whiteSpace: "pre-wrap", overflowWrap: "anywhere", userSelect: "text" },
+  buttons: { display: "flex", gap: "12px", marginTop: "8px" },
+  primary: { flex: 1, height: "60px", border: "none", background: "#7A1631", color: "#F3ECE1", fontWeight: 500, fontSize: "18px", cursor: "pointer", textAlign: "left", padding: "0 24px" },
+  secondary: { flex: 1, height: "60px", border: "2px solid #2E0A14", background: "transparent", color: "#2E0A14", fontWeight: 500, fontSize: "18px", cursor: "pointer", textAlign: "left", padding: "0 24px" },
+  status: { color: "#6B4A50", fontSize: "14px", fontWeight: 400 },
+  error: { color: "#7A1631", fontSize: "14px" },
 };

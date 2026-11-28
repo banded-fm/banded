@@ -1,4 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { useLingering } from "../components/useLingering";
+import { SheetScrim } from "../components/SheetScrim";
 import { SearchBar } from "../components/SearchBar";
 import { GraphView } from "../components/GraphView";
 import { InfoPanel } from "../components/InfoPanel";
@@ -119,7 +121,6 @@ export function ExplorePage() {
   const [loading, setLoading] = useState(false);
   const [dbReady, setDbReady] = useState(isDbLoaded());
   const [error, setError] = useState<string | null>(null);
-  const [prefill, setPrefill] = useState<string | null>(null);
   // The MBID behind the search box's text: the last clicked node, or the artist the last search added (picked
   // from the dropdown or found by name). A search for that exact text resolves by ID instead of by an ambiguous
   // name (e.g. two artists named "Fuzz"); other text searches by name.
@@ -187,6 +188,8 @@ export function ExplorePage() {
   // A click or tap outside the panel closes it. On the graph, empty space and links close it (GraphView's
   // onBackgroundClick: not a drag to pan) and a node switches to that node; anywhere else on the page closes it.
   const closePanel = useCallback(() => setSelectedNode(null), []);
+  // The artist's sheet stays a moment after closing, to slide away (phones)
+  const [sheetNode, sheetClosing] = useLingering(selectedNode);
   useEffect(() => {
     if (!selectedNode) return;
     const onPointerDown = (e: PointerEvent) => {
@@ -202,7 +205,7 @@ export function ExplorePage() {
     graph.clear();
     setVersion((v) => v + 1);
     setSelectedNode(null);
-    // pendingNode is kept: the search box keeps its text, and that text still means the artist that was clicked
+    // pendingNode is kept: the search box keeps its text, and that text still means the artist last searched
     // (it's only used while the box holds exactly that name), so + after Reset adds the same artist, not a namesake.
     setError(null);
   }, [graph]);
@@ -211,37 +214,38 @@ export function ExplorePage() {
     (node: { id?: string | number }) => {
       if (node.id) {
         const graphNode = graph.getNode(String(node.id));
+        // Opens the artist's panel; the search box is left as it is
         setSelectedNode(graphNode ?? null);
-        if (graphNode) {
-          setPrefill(graphNode.name);
-          // Remember this exact node so search resolves by MBID, not name
-          pendingNode.current = { name: graphNode.name, id: graphNode.id };
-        }
       }
     },
     [graph]
   );
 
   return (
-    <>
-      <SearchBar onSearch={handleSearch} loading={loading} prefill={prefill} onPrefillConsumed={() => setPrefill(null)} onReset={handleReset} />
+    // The legend sits top right of the page, level with the search (as in the design); phones put it bottom left.
+    <div className="explore-page" style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+      <SearchBar onSearch={handleSearch} loading={loading} onReset={handleReset} />
       <DebugConsole />
-      {!dbReady && <div style={{ color: "#888", padding: "0.5rem 1rem", fontSize: "0.85rem" }}>Loading the full graph in the background. Searches use the server until it's ready.</div>}
-      {error && <div style={{ color: "#ff6b6b", padding: "0.5rem 1rem" }}>{error}</div>}
+      {!dbReady && <div style={{ color: "#6B4A50", padding: "0.5rem 1rem", fontSize: "0.85rem" }}>Loading the full graph in the background. Searches use the server until it's ready.</div>}
+      {error && <div style={{ color: "#7A1631", padding: "0.5rem 1rem" }}>{error}</div>}
       <div style={{ display: "flex", flex: 1, overflow: "hidden", position: "relative" }}>
-        <GraphView data={graphData} onNodeClick={handleNodeClick} onBackgroundClick={closePanel} />
-        <GraphLegend visible={visibleRels} onToggle={toggleRel} />
-        {selectedNode && (
+        <div style={{ flex: 1, display: "flex", position: "relative", minWidth: 0 }}>
+          <GraphView data={graphData} onNodeClick={handleNodeClick} onBackgroundClick={closePanel} />
+        </div>
+        {sheetNode && <SheetScrim closing={sheetClosing} onClose={() => setSelectedNode(null)} />}
+        {sheetNode && (
           <InfoPanel
-            node={selectedNode}
+            node={sheetNode}
+            closing={sheetClosing}
             onClose={() => setSelectedNode(null)}
-            expanded={graph.isExpanded(selectedNode.id)}
+            expanded={graph.isExpanded(sheetNode.id)}
             busy={loading}
-            onExpand={() => expandNode(selectedNode)}
-            onUnexpand={() => unexpandNode(selectedNode)}
+            onExpand={() => expandNode(sheetNode)}
+            onUnexpand={() => unexpandNode(sheetNode)}
           />
         )}
       </div>
-    </>
+      <GraphLegend visible={visibleRels} onToggle={toggleRel} otherSheetOpen={!!selectedNode} />
+    </div>
   );
 }

@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { Layout } from "../components/Layout";
 import { HomePage } from "../pages/HomePage";
 
-const FOOTER = "Data from MusicBrainz, setlist.fm and Pollstar. Connections and shows may be missing due to incomplete data.";
+const FOOTER = ["Data from MusicBrainz, setlist.fm and Pollstar.", "Connections and shows may be missing due to incomplete data."];
 
 function render(path: string) {
   return renderToStaticMarkup(
@@ -27,7 +27,7 @@ describe("site footer", () => {
   it("is under the pages that have the nav bar", () => {
     const html = render("/graph");
     expect(footers(html)).toBe(1);
-    expect(html).toContain(FOOTER);
+    for (const line of FOOTER) expect(html).toContain(line);
   });
 
   it("comes after the home page's content, once", () => {
@@ -47,13 +47,13 @@ describe("nav bar", () => {
     const at = (to: string) => html.indexOf(`href="${to}"`);
     const order = ["/graph", "/map", "/proximity", "/upcoming", "/play", "/about"];
     for (let i = 1; i < order.length; i++) expect(at(order[i]!)).toBeGreaterThan(at(order[i - 1]!));
-    for (const name of ["Graph", "Map", "Proximity", "Upcoming", "Play", "About"]) expect(html).toContain(`>${name}</a>`);
-    expect(html).toMatch(/class="nav-current"[^>]*>Map<\/span>/);
+    for (const name of ["Graph", "Map", "Proximity", "Upcoming", "Play", "About"]) expect(html).toContain(`class="nav-label">${name}</span>`);
+    expect(html).toMatch(/class="nav-current[^"]*"[^>]*>Map<\/span>/);
   });
 
   it("names a menu page only for the phone menu, without a badge", () => {
     const html = render("/graph");
-    expect(html).toMatch(/class="nav-current"[^>]*>Graph<\/span>/);
+    expect(html).toMatch(/class="nav-current[^"]*"[^>]*>Graph<\/span>/);
     expect(html).not.toContain("nav-badge");
   });
 });

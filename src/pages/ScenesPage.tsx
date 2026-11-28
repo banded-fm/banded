@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useLingering } from "../components/useLingering";
+import { SheetScrim } from "../components/SheetScrim";
 import { useSearchParams } from "react-router-dom";
 import worldLow from "../scenes/world-low.svg?raw";
+import { SelectMenu } from "../components/SelectMenu";
 import {
   DECADES, HOME, citiesByName, cityBubbles, colorFor, labelCities, decadeColor, filterScenes, loadScenes,
   MAX_ZOOM, MIN_ZOOM, clampView, placeScenes, project, scatterLayout, scenesUrls, shortName, viewBox, zoomAt,
@@ -85,6 +88,8 @@ export function ScenesPage() {
   const centres = useMemo(() => new Map(cities.map((c) => [c.id, c.centre])), [cities]);
   const bubbles = useMemo(() => cityBubbles(shown, centres), [shown, centres]);
   const selected: PlacedScene | null = placed.find((s) => s.id === selectedId) ?? null;
+  // The scene's sheet stays a moment after closing, to slide away (phones)
+  const [sheetScene, sheetClosing] = useLingering(selected);
   // The scene panel's height: on a phone it's a sheet at the bottom, and the map buttons sit just above it.
   const [sheetH, setSheetH] = useState(0);
   useLayoutEffect(() => {
@@ -96,6 +101,17 @@ export function ScenesPage() {
     ro.observe(el);
     return () => ro.disconnect();
   }, [selected?.id]);   // the panel appears once the data has loaded, and changes with the scene
+
+  // Phones: the heading sits a quarter of the way down the screen, so the world starts lower than centred, a
+  // seventh of the map's height down, leaving the heading clear. Once, at the first measure, and only while the view
+  // is still the starting one. (Wide screens: centred; the heading may overlap the dots.)
+  const dropped = useRef(false);
+  useEffect(() => {
+    if (dropped.current || size.w === 0 || !window.matchMedia("(max-width: 640px)").matches) return;
+    dropped.current = true;
+    const down = size.h / 7;
+    setView((v) => (v === HOME ? { ...HOME, cy: HOME.cy - down * viewBox(HOME, size.w, size.h).unitsPerPx } : v));
+  }, [size.w, size.h]);
 
   const vb = viewBox(view, size.w, size.h);
   const upp = vb.unitsPerPx;
@@ -119,7 +135,7 @@ export function ScenesPage() {
     const next = viewBox({ cx: x, cy: y, k }, size.w, size.h);
     const phone = window.matchMedia("(max-width: 640px)").matches;
     const sheet = phone && withSheet;
-    // Around the city on screen: above a phone's sheet (the city a quarter of the way down), clear of the hint.
+    // Around the city on screen: above a phone's sheet (the city a quarter of the way down), clear of the heading.
     const room: Room = sheet
       ? { left: -size.w / 2 + 6, right: size.w / 2 - 6, top: -size.h / 4 + filtersH + 6, bottom: size.h * 0.2 }
       : { left: -size.w / 2 + 6, right: size.w / 2 - 6, top: -(size.h - filtersH) / 2 + 6, bottom: (size.h - filtersH) / 2 - 30 };
@@ -339,7 +355,7 @@ export function ScenesPage() {
     <div className="scenes-page" style={styles.page}>
       {filtersOpen && <div ref={filtersRef} id="scenes-filters" className="scenes-controls" style={styles.controls}>
         <div style={styles.titleRow}>
-          <h1 style={styles.title}>Map</h1>
+          <h2 className="eyebrow" style={styles.title}>Filter scenes</h2>
           <span style={styles.count} aria-live="polite">
             {data ? `${shown.length.toLocaleString()} of ${placed.length.toLocaleString()} scenes` : error ? "" : "Loading…"}
           </span>
@@ -347,11 +363,8 @@ export function ScenesPage() {
         <div className="scenes-filters" style={styles.filters}>
           <input type="search" value={query} onChange={(e) => setQuery(e.target.value)}
             placeholder="Scene, city, genre or artist" aria-label="Filter scenes" style={styles.input} />
-          <select value="" onChange={(e) => { if (e.target.value) openCity(e.target.value); }}
-            aria-label="Go to a city" style={styles.select} disabled={!data}>
-            <option value="">Go to a city…</option>
-            {cities.map((c) => <option key={c.id} value={c.id}>{c.city} ({c.scenes.length})</option>)}
-          </select>
+          <SelectMenu placeholder="Go to a city…" ariaLabel="Go to a city" onPick={openCity} disabled={!data}
+            options={cities.map((c) => ({ value: c.id, label: `${c.city} (${c.scenes.length})` }))} style={styles.select} />
           {filtering && (
             <button type="button" onClick={zoomToMatches} style={styles.button} disabled={shown.length === 0}>
               Zoom to matches
@@ -365,7 +378,7 @@ export function ScenesPage() {
             <button key={d.start} type="button" onClick={() => toggleDecade(d.start)}
               aria-pressed={decades.has(d.start)}
               style={{ ...styles.chip, ...(decades.has(d.start) ? styles.chipOn : {}), borderColor: d.color }}>
-              <span style={{ ...styles.dot, background: d.color }} />{d.label}
+              <span className="round" style={{ ...styles.dot, background: d.color }} />{d.label}
             </button>
           ))}
         </div>
@@ -381,6 +394,12 @@ export function ScenesPage() {
           onClick={onMapClick}
           onDoubleClick={(e) => { if (open) return; const p = local(e); setView((v) => zoomAt(v, 2, p.x, p.y, size.w, size.h)); }}
         >
+          {/* Land as a field of dots, a fixed size on screen whatever the zoom */}
+          <defs>
+            <pattern id="land-dots" width={9} height={9} patternUnits="userSpaceOnUse" patternTransform={`scale(${upp})`}>
+              <circle cx={4.5} cy={4.5} r={1.7} fill="#CDBCA8" />
+            </pattern>
+          </defs>
           <g className="scenes-world" dangerouslySetInnerHTML={{ __html: worldPaths }} />
           {/* Two layers: every tap area first, then every dot, so a dot under the finger wins over a
               neighbour's larger (invisible) tap area. */}
@@ -395,7 +414,7 @@ export function ScenesPage() {
                     ) : (<>
                       <title>{`${b.city}: ${b.count} scene${b.count === 1 ? "" : "s"}`}</title>
                       <circle cx={x} cy={y} r={r} fill={decadeColor(b.decade)} fillOpacity={0.75}
-                        stroke="#0f0f0f" strokeWidth={1 * upp} />
+                        stroke="#F3ECE1" strokeWidth={1 * upp} />
                       {(() => {
                         const n = cityNames.get(b.cityId);
                         if (!n) return null;
@@ -407,7 +426,7 @@ export function ScenesPage() {
                         return (<g onClick={byName}>
                           <rect x={left} y={ly - 7 * upp} width={w} height={14 * upp} fill="transparent" />
                           <text x={lx} y={ly} fontSize={LABEL_PX * upp} textAnchor={n.anchor}
-                            dominantBaseline="middle" fill="#ccc">{b.city}</text>
+                            dominantBaseline="middle" fill="#2E0A14">{b.city}</text>
                         </g>);
                       })()}
                     </>)}
@@ -421,14 +440,14 @@ export function ScenesPage() {
               {/* lines from the city to each of its scenes */}
               {around.map(({ s, x, y }) => (
                 <line key={s.id} x1={centre[0]} y1={centre[1]} x2={x} y2={y} className="scenes-spoke"
-                  stroke={s.id === selectedId ? "#fff" : "#4b5d6b"} />
+                  stroke={s.id === selectedId ? "#2E0A14" : "#6B4A50"} />
               ))}
               {/* the city itself, and its name: tapping either keeps the city open */}
               <g className="scenes-hit">
                 <circle cx={centre[0]} cy={centre[1]} r={TAP_PX * upp} fill="transparent" />
-                <circle cx={centre[0]} cy={centre[1]} r={r * 1.6} fill="#e0e0e0" stroke="#0f0f0f" strokeWidth={upp} />
-                <text x={centre[0]} y={centre[1] - r * 1.6 - 6 * upp} fontSize={CITY_LABEL_PX * upp} fontWeight={700}
-                  textAnchor="middle" fill="#fff">{openName}</text>
+                <circle cx={centre[0]} cy={centre[1]} r={r * 1.6} fill="#2E0A14" stroke="#F3ECE1" strokeWidth={upp} />
+                <text x={centre[0]} y={centre[1] - r * 1.6 - 6 * upp} fontSize={CITY_LABEL_PX * upp} fontWeight={500}
+                  textAnchor="middle" fill="#2E0A14">{openName}</text>
               </g>
             </g>
           )}
@@ -445,11 +464,11 @@ export function ScenesPage() {
                     ) : (<>
                       <title>{`${s.name}${s.era ? ` · ${s.era.label}` : ""}`}</title>
                       <circle cx={x} cy={y} r={on ? r * 1.3 : r} fill={colorFor(s)}
-                        stroke={on ? "#fff" : "#0f0f0f"} strokeWidth={(on ? 2.5 : 1) * upp} />
+                        stroke={on ? "#2E0A14" : "#F3ECE1"} strokeWidth={(on ? 2.5 : 1) * upp} />
                       {(showNames || on) && (<>
                         {/* The name opens the scene too: its tap area is the row scatterLayout kept free for it. */}
                         <rect x={left ? lx - w * upp : lx} y={y - 9 * upp} width={w * upp} height={18 * upp} fill="transparent" />
-                        <text x={lx} y={y} fontSize={LABEL_PX * upp} fontWeight={on ? 700 : 400} fill={on ? "#fff" : "#ccc"}
+                        <text x={lx} y={y} fontSize={LABEL_PX * upp} fontWeight={on ? 700 : 500} fill={on ? "#7A1631" : "#2E0A14"}
                           textAnchor={left ? "end" : "start"} dominantBaseline="middle">{shortName(s.name, s.city)}</text>
                       </>)}
                     </>)}
@@ -467,7 +486,7 @@ export function ScenesPage() {
               onClick={() => setFiltersOpen((o) => !o)}>
               <FilterIcon />
               {/* Filters still apply while hidden: a dot says some are set. */}
-              {filtering && !filtersOpen && <span style={styles.filterDot} aria-hidden="true" />}
+              {filtering && !filtersOpen && <span className="round" style={styles.filterDot} aria-hidden="true" />}
             </button>
           </div>
           <div style={styles.zoom}>
@@ -481,21 +500,22 @@ export function ScenesPage() {
               onClick={() => { setOpen(null); select(null); }}>✕</button>
           </div>
         )}
-        <p style={styles.hint}>
-          {!open ? "Tap a city" : showNames ? "Tap a scene, or the map to close the city" : "Zoom in to read the scene names"}
-        </p>
+        {/* Only while choosing a city: once one is open, its scene names fill the map (and the close button sits top right) */}
+        {!open && <h1 className="scenes-heading" style={styles.heading1}>Select a city to see its scenes</h1>}
         {error && <p role="alert" style={styles.error}>{error}</p>}
-        {selected && <ScenePanel scene={selected} artistsBy={data?.artists_by} onClose={() => select(null)} />}
+        {sheetScene && <SheetScrim closing={sheetClosing} onClose={() => select(null)} />}
+        {sheetScene && <ScenePanel scene={sheetScene} artistsBy={data?.artists_by} closing={sheetClosing} onClose={() => select(null)} />}
       </div>
     </div>
   );
 }
 
-function ScenePanel({ scene, artistsBy, onClose }: {
+function ScenePanel({ scene, artistsBy, onClose, closing = false }: {
+  closing?: boolean;
   scene: PlacedScene; artistsBy: ScenesData["artists_by"]; onClose: () => void;
 }) {
   return (
-    <aside className="scene-panel" style={styles.panel} aria-label={scene.name}>
+    <aside className={`scene-panel${closing ? " sheet-closing" : ""}`} style={styles.panel} aria-label={scene.name}>
       <button type="button" onClick={onClose} aria-label="Close" style={styles.close}>✕</button>
       <h2 style={styles.panelTitle}>{scene.name}</h2>
       {scene.era && <p style={styles.panelSub}>{scene.era.label}</p>}
@@ -543,37 +563,40 @@ function Chips({ label, items }: { label: string; items: string[] }) {
 const styles: Record<string, React.CSSProperties> = {
   page: { position: "relative", flex: 1, minHeight: 0, display: "flex", flexDirection: "column" },
   // Over the top of the map, not above it, so the map stays put when they open.
-  controls: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 20, background: "rgba(18, 18, 18, 0.97)", boxShadow: "0 6px 16px rgba(0, 0, 0, 0.4)", padding: "0.75rem 1rem 0.5rem", display: "flex", flexDirection: "column", gap: "0.5rem", borderBottom: "1px solid #2a2a2a" },
+  controls: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 20, background: "#F3ECE1", boxShadow: "0 6px 0 #2E0A14", padding: "14px 48px 12px", display: "flex", flexDirection: "column", gap: "12px", borderBottom: "2px solid #2E0A14" },
   titleRow: { display: "flex", alignItems: "baseline", gap: "0.5rem", flexWrap: "wrap" },
-  title: { fontSize: "1.3rem", fontWeight: 700, color: "#e0e0e0" },
-  badge: { fontSize: "0.7rem", color: "#feca57", border: "1px solid #feca57", borderRadius: "999px", padding: "0.05rem 0.45rem" },
-  count: { marginLeft: "auto", color: "#888", fontSize: "0.8rem" },
-  filters: { display: "flex", gap: "0.5rem", flexWrap: "wrap" },
-  input: { flex: "1 1 14rem", minWidth: 0, minHeight: "44px", padding: "0 0.75rem", background: "#1a1a1a", border: "1px solid #333", borderRadius: "8px", color: "#e0e0e0", fontSize: "1rem" },
-  select: { flex: "0 1 12rem", minWidth: 0, minHeight: "44px", padding: "0 0.5rem", background: "#1a1a1a", border: "1px solid #333", borderRadius: "8px", color: "#e0e0e0", fontSize: "0.9rem" },
-  button: { minHeight: "44px", padding: "0 0.9rem", background: "#2a2a2a", border: "1px solid #444", borderRadius: "8px", color: "#e0e0e0", fontSize: "0.9rem", cursor: "pointer" },
-  decades: { display: "flex", gap: "0.4rem", overflowX: "auto", paddingBottom: "0.25rem" },
-  chip: { flex: "0 0 auto", display: "inline-flex", alignItems: "center", gap: "0.35rem", minHeight: "44px", padding: "0 0.75rem", background: "#161616", border: "1px solid #333", borderRadius: "999px", color: "#aaa", fontSize: "0.85rem", cursor: "pointer", whiteSpace: "nowrap" },
-  chipOn: { background: "#2a2a2a", color: "#fff" },
-  dot: { width: "0.6rem", height: "0.6rem", borderRadius: "50%", display: "inline-block" },
-  mapWrap: { position: "relative", flex: 1, minHeight: "320px", overflow: "hidden", background: "#0b1a26", touchAction: "none" },
+  title: {},
+  badge: { fontSize: "12px", color: "#7A1631", border: "2px solid #7A1631", padding: "1px 6px" },
+  count: { marginLeft: "auto", color: "#6B4A50", fontSize: "13px", fontWeight: 400 },
+  filters: { display: "flex", gap: "12px 24px", flexWrap: "wrap", alignItems: "flex-end" },
+  input: { flex: "1 1 14rem", minWidth: 0, height: "48px", padding: 0, fontSize: "22px" },
+  select: { flex: "0 1 14rem", minWidth: 0, height: "48px", padding: 0, fontSize: "18px" },
+  button: { height: "48px", padding: "0 22px", background: "#7A1631", border: "none", color: "#F3ECE1", fontSize: "15px", fontWeight: 500, cursor: "pointer" },
+  decades: { display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "2px" },
+  chip: { flex: "0 0 auto", display: "inline-flex", alignItems: "center", gap: "8px", minHeight: "44px", padding: "0 14px", background: "transparent", border: "2px solid #2E0A14", color: "#2E0A14", fontSize: "14px", fontWeight: 500, cursor: "pointer", whiteSpace: "nowrap" },
+  chipOn: { background: "#2E0A14", color: "#F3ECE1" },
+  dot: { width: "10px", height: "10px", borderRadius: "50%", display: "inline-block" },
+  mapWrap: { position: "relative", flex: 1, minHeight: "320px", overflow: "hidden", background: "#F3ECE1", touchAction: "none" },
   svg: { display: "block", cursor: "grab", userSelect: "none", transformOrigin: "0 0", willChange: "transform" },
   // Placed by .scenes-zoom in index.css: bottom right, above a phone's sheet.
   mapButtons: { display: "flex", flexDirection: "column", gap: "8px" },
-  zoom: { display: "flex", flexDirection: "column", gap: "1px", borderRadius: "8px", overflow: "hidden", border: "1px solid #333" },
-  zoomBtn: { position: "relative", display: "flex", alignItems: "center", justifyContent: "center", width: "44px", height: "44px", background: "#1a1a1a", border: "none", color: "#e0e0e0", fontSize: "1.2rem", cursor: "pointer" },
-  zoomBtnOn: { background: "#e0e0e0", color: "#1a1a1a" },
-  filterDot: { position: "absolute", top: "8px", right: "8px", width: "7px", height: "7px", borderRadius: "50%", background: "#2ecc71" },
-  hint: { position: "absolute", bottom: "0.5rem", left: "0.75rem", color: "#777", fontSize: "0.75rem", pointerEvents: "none" },
-  error: { position: "absolute", top: "1rem", left: "4.5rem", right: "1rem", zIndex: 10, background: "#2a1515", border: "1px solid #ff6b6b", color: "#ffb3b3", padding: "0.75rem", borderRadius: "8px", fontSize: "0.85rem" },
-  panel: { zIndex: 10, background: "rgba(22, 22, 22, 0.97)", border: "1px solid #333", color: "#e0e0e0", overflowY: "auto", padding: "1rem 1rem 1.25rem" },
-  close: { position: "absolute", top: "0.25rem", right: "0.25rem", minWidth: "44px", minHeight: "44px", background: "none", border: "none", color: "#aaa", fontSize: "1.1rem", cursor: "pointer" },
-  panelTitle: { fontSize: "1.1rem", fontWeight: 700, paddingRight: "2.5rem", lineHeight: 1.3 },
-  panelSub: { color: "#888", fontSize: "0.85rem", marginTop: "0.15rem" },
-  chips: { marginTop: "0.6rem" },
-  heading: { fontSize: "0.8rem", fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: "0.04em", margin: "0.75rem 0 0.35rem" },
-  chipRow: { display: "flex", flexWrap: "wrap", gap: "0.3rem" },
-  tag: { fontSize: "0.8rem", background: "#242424", border: "1px solid #333", borderRadius: "999px", padding: "0.15rem 0.55rem", color: "#ccc" },
-  artists: { listStyle: "none", columns: 2, columnGap: "1rem", fontSize: "0.85rem" },
-  artist: { padding: "0.15rem 0", breakInside: "avoid", color: "#ccc" },
+  zoom: { display: "flex", flexDirection: "column", gap: "8px" },
+  zoomBtn: { position: "relative", display: "flex", alignItems: "center", justifyContent: "center", width: "48px", height: "48px", background: "#F3ECE1", border: "2px solid #2E0A14", color: "#2E0A14", fontSize: "22px", cursor: "pointer" },
+  zoomBtnOn: { background: "#2E0A14", color: "#F3ECE1" },
+  filterDot: { position: "absolute", top: "7px", right: "7px", width: "8px", height: "8px", borderRadius: "50%", background: "#7A1631" },
+  // The map's title, top left (wide screens only: index.css)
+  // The size of the Graph page's intro ("Search an artist to start"), as far in from the top as it is there
+  heading1: { position: "absolute", top: "40px", left: "48px", margin: 0, fontSize: "clamp(36px, 5.6vw, 76px)", fontWeight: 500, lineHeight: 0.95, letterSpacing: "-0.055em", color: "#2E0A14", pointerEvents: "none", zIndex: 1 },
+  error: { position: "absolute", top: "1rem", left: "48px", right: "1rem", zIndex: 10, background: "#F3ECE1", border: "2px solid #7A1631", color: "#7A1631", padding: "12px 14px", fontSize: "15px" },
+  // The scene: a card on a 2px deep border with a hard shadow; its name large in maroon
+  panel: { zIndex: 10, background: "#F3ECE1", border: "2px solid #2E0A14", boxShadow: "6px 6px 0 #2E0A14", color: "#2E0A14", overflowY: "auto", padding: "16px 20px 20px" },
+  close: { position: "absolute", top: "6px", right: "6px", minWidth: "44px", minHeight: "44px", background: "none", border: "none", color: "#2E0A14", fontSize: "18px", cursor: "pointer" },
+  panelTitle: { fontSize: "30px", fontWeight: 500, lineHeight: 1, letterSpacing: "-0.05em", color: "#7A1631", paddingRight: "2.5rem" },
+  panelSub: { color: "#6B4A50", fontSize: "12px", letterSpacing: "0.1em", textTransform: "uppercase", marginTop: "10px" },
+  chips: { marginTop: "12px" },
+  heading: { fontSize: "12px", fontWeight: 500, color: "#2E0A14", textTransform: "uppercase", letterSpacing: "0.1em", margin: "16px 0 6px", borderTop: "1px solid #D8CBBB", paddingTop: "10px" },
+  chipRow: { display: "flex", flexWrap: "wrap", gap: "6px" },
+  tag: { fontSize: "13px", border: "2px solid #2E0A14", padding: "2px 8px", color: "#2E0A14" },
+  artists: { listStyle: "none", columns: 2, columnGap: "1rem", fontSize: "15px" },
+  artist: { padding: "3px 0", breakInside: "avoid", color: "#2E0A14" },
 };

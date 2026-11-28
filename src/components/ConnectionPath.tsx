@@ -7,10 +7,10 @@ import { FREE_HOPS, HOP_DAMPING, REL_WEIGHTS, type PairScore, type PathStep } fr
 import { relationSentence } from "../graph/relationships";
 
 export function scoreColor(score: number): string {
-  if (score >= 70) return "#55efc4";
-  if (score >= 40) return "#feca57";
-  if (score >= 15) return "#ff9f43";
-  return "#636e72";
+  if (score >= 70) return "#1F7A74";
+  if (score >= 40) return "#B87A0A";
+  if (score >= 15) return "#D4561A";
+  return "#6B4A50";
 }
 
 /** "1.00 × 0.80 × 0.80 × 0.9 = 0.58 → 58": how the strongest path's weights make the score. */
@@ -72,21 +72,21 @@ export function PathSteps({ path }: { path: PathStep[] }) {
 }
 
 const pathStyles: Record<string, React.CSSProperties> = {
-  list: { margin: 0, paddingLeft: "1.25rem", display: "flex", flexDirection: "column", gap: "0.35rem", fontSize: "0.85rem", color: "#e0e0e0" },
+  list: { margin: 0, paddingLeft: "1.25rem", display: "flex", flexDirection: "column", gap: "0.35rem", fontSize: "14px", fontWeight: 400, color: "#2E0A14" },
   step: { overflowWrap: "anywhere" },
-  note: { display: "block", fontSize: "0.72rem", color: "#888", marginTop: "0.1rem" },
-  weightRow: { display: "flex", justifyContent: "space-between", gap: "0.75rem", fontSize: "0.8rem", color: "#e0e0e0" },
-  weightValue: { color: "#48dbfb", fontVariantNumeric: "tabular-nums", flexShrink: 0 },
+  note: { display: "block", fontSize: "0.72rem", color: "#6B4A50", marginTop: "0.1rem" },
+  weightRow: { display: "flex", justifyContent: "space-between", gap: "0.75rem", fontSize: "0.8rem", color: "#2E0A14" },
+  weightValue: { color: "#2E0A14", fontVariantNumeric: "tabular-nums", flexShrink: 0 },
 };
 
 /** The side panel (desktop) / bottom sheet (phones): Explore's InfoPanel look. */
 export const panelStyles: Record<string, React.CSSProperties> = {
-  panel: { width: "280px", maxWidth: "100%", padding: "1rem", background: "#1a1a1a", borderLeft: "1px solid #2a2a2a", overflowY: "auto", display: "flex", flexDirection: "column", gap: "1rem", flexShrink: 0 },
+  panel: { width: "320px", maxWidth: "100%", padding: "16px 24px 20px", background: "#F3ECE1", borderTop: "2px solid #2E0A14", overflowY: "auto", display: "flex", flexDirection: "column", gap: "1rem", flexShrink: 0 },
   header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "-0.5rem" },
-  badge: { padding: "2px 8px", borderRadius: "3px", fontSize: "0.75rem", fontWeight: 600, color: "#000" },
-  close: { background: "none", border: "none", color: "#888", fontSize: "1.5rem", cursor: "pointer", lineHeight: 1 },
-  title: { fontSize: "1.2rem", fontWeight: 600, overflowWrap: "anywhere", margin: 0 },
-  section: { display: "flex", flexDirection: "column", gap: "0.4rem" },
-  heading: { fontSize: "0.75rem", fontWeight: 600, color: "#aaa", textTransform: "uppercase", letterSpacing: "0.03em", margin: 0 },
-  muted: { fontSize: "0.8rem", color: "#888", margin: 0 },
+  badge: { padding: "3px 8px", fontSize: "13px", fontWeight: 500, color: "#F3ECE1" },
+  close: { background: "none", border: "none", color: "#2E0A14", fontSize: "1.75rem", cursor: "pointer", lineHeight: 1 },
+  title: { fontSize: "36px", fontWeight: 500, lineHeight: 0.95, letterSpacing: "-0.055em", color: "#7A1631", overflowWrap: "anywhere", margin: 0 },
+  section: { display: "flex", flexDirection: "column", gap: "0.4rem", borderTop: "1px solid #D8CBBB", paddingTop: "10px" },
+  heading: { fontSize: "12px", fontWeight: 500, color: "#2E0A14", textTransform: "uppercase", letterSpacing: "0.1em", margin: 0 },
+  muted: { fontSize: "14px", fontWeight: 400, color: "#6B4A50", margin: 0 },
 };
