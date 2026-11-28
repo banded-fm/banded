@@ -1,7 +1,8 @@
 import { SwissLine } from "../components/SwissLine";
+import { PHONE, useMediaQuery } from "../components/useMediaQuery";
 import { useLingering } from "../components/useLingering";
 import { SheetScrim } from "../components/SheetScrim";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 // Spotify's own icon, unaltered (developer.spotify.com/documentation/design: "Icon", green RGB)
 import spotifyIcon from "../assets/spotify-icon-green.svg";
 import { searchCities, getCityEvents, type PollstarCity } from "../api/pollstar";
@@ -42,8 +43,11 @@ export function DiscoverPage() {
   // The concert whose panel is open (by id, so it follows the concert as it's scored and re-sorted)
   const [openId, setOpenId] = useState<string | null>(null);
   const openConcert = openId ? (concerts?.find((c) => c.id === openId) ?? null) : null;
-  // The concert's sheet stays a moment after closing, to slide away (phones)
-  const [sheetConcert, sheetClosing] = useLingering(openConcert);
+  // Phones: the concert opens in a bottom sheet (kept a moment after closing, to slide away). Wide screens: its row
+  // opens in place, its details growing open beneath it (and shrinking away).
+  const isPhone = useMediaQuery(PHONE);
+  const [sheetConcert, sheetClosing] = useLingering(isPhone ? openConcert : null);
+  const [rowConcert, rowClosing] = useLingering(isPhone ? null : openConcert, { phoneOnly: false });
 
   // Escape closes the panel.
   useEffect(() => {
@@ -325,12 +329,12 @@ export function DiscoverPage() {
               <span style={styles.resultsDates}>{rangeLabel}</span>
             </h2>
             {concerts.map((c, i) => (
+              <Fragment key={c.id}>
               <button
-                key={c.id}
                 type="button"
                 className="pair-card"
                 style={{ ...styles.card, ...styles.cardButton, ...(i === 0 ? styles.firstCard : {}) }}
-                onClick={() => setOpenId(c.id)}
+                onClick={() => setOpenId(openId === c.id ? null : c.id)}
                 aria-expanded={openId === c.id}
                 aria-controls="concert-panel"
               >
@@ -346,6 +350,14 @@ export function DiscoverPage() {
                   {c.isFestival ? " · Festival" : ""}
                 </span>
               </button>
+              {rowConcert?.id === c.id && (
+                <div className={`row-expand${rowClosing ? " row-collapsing" : ""}`}>
+                  <div className="row-expand-inner">
+                    <ConcertPanel inline concert={rowConcert} running={running} onClose={() => setOpenId(null)} />
+                  </div>
+                </div>
+              )}
+              </Fragment>
             ))}
           </div>
         )}
@@ -369,7 +381,11 @@ function ScoreLabel({ concert: c, running }: { concert: RankedConcert; running: 
  * from each, best first. Explore's node panel (.info-panel): a sidebar on
  * desktop, a bottom sheet on phones, like the Similarity page's.
  */
-function ConcertPanel({ concert: c, running, onClose, closing = false }: { concert: RankedConcert; running: boolean; onClose: () => void; closing?: boolean }) {
+function ConcertPanel({ concert: c, running, onClose, closing = false, inline = false }: {
+  concert: RankedConcert; running: boolean; onClose: () => void; closing?: boolean;
+  /** Wide screens: in its row, beneath it (no close button, title or date: the row has them) */
+  inline?: boolean;
+}) {
   const pairs = [...(c.pairs ?? [])].sort((a, b) => b.score - a.score);
   // The headliner as the graph matched it (each path ends there; an empty path is the liked artist itself)
   const viaPath = pairs.find((p) => p.path && p.path.length > 0)?.path;
@@ -387,8 +403,9 @@ function ConcertPanel({ concert: c, running, onClose, closing = false }: { conce
   }, [headlinerId]); // eslint-disable-line react-hooks/exhaustive-deps
   const spotifyUrl = (spotifyPage?.id === headlinerId ? spotifyPage?.url : null)
     ?? `https://open.spotify.com/search/${encodeURIComponent(c.artistName)}`;
+  const Box = inline ? "div" : "aside";
   return (
-    <aside id="concert-panel" className={`info-panel${closing ? " sheet-closing" : ""}`} style={panelStyles.panel} aria-label="How this concert fits">
+    <Box id="concert-panel" className={inline ? undefined : `info-panel${closing ? " sheet-closing" : ""}`} style={inline ? panelStyles.inline : panelStyles.panel} aria-label="How this concert fits">
       <div style={panelStyles.header}>
         <div style={styles.headerStart}>
           {c.scored && c.artistFound ? (
@@ -409,18 +426,18 @@ function ConcertPanel({ concert: c, running, onClose, closing = false }: { conce
             <img src={spotifyIcon} alt="" width={22} height={22} />
           </a>
         </div>
-        <button onClick={onClose} className="info-close" style={panelStyles.close} aria-label="Close panel">
+        {!inline && <button onClick={onClose} className="info-close" style={panelStyles.close} aria-label="Close panel">
           ×
-        </button>
+        </button>}
       </div>
-      <h2 style={panelStyles.title}>{c.artistName}</h2>
-      <section style={panelStyles.section}>
+      {!inline && <h2 style={panelStyles.title}>{c.artistName}</h2>}
+      {!inline && <section style={panelStyles.section}>
         {c.supportingArtists.length > 0 && <p style={panelStyles.muted}>Support from: {c.supportingArtists.join(", ")}</p>}
         <p style={panelStyles.muted}>
           {formatDate(c.playDate)} · {c.venueName}
           {c.isFestival ? " · Festival" : ""}
         </p>
-      </section>
+      </section>}
       {!c.scored ? null : !c.artistFound ? (
         <p style={panelStyles.muted}>{c.artistName} isn't in the music graph, so it can't be compared yet.</p>
       ) : (
@@ -452,7 +469,7 @@ function ConcertPanel({ concert: c, running, onClose, closing = false }: { conce
           )}
         </>
       )}
-    </aside>
+    </Box>
   );
 }
 
@@ -523,9 +540,9 @@ const styles: Record<string, React.CSSProperties> = {
   chipList: { display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "10px" },
   chip: { display: "flex", alignItems: "center", gap: "6px", height: "36px", padding: "0 6px 0 14px", border: "2px solid #2E0A14", color: "#2E0A14", fontSize: "15px", letterSpacing: "-0.01em" },
   chipRemove: { background: "none", border: "none", color: "#2E0A14", cursor: "pointer", fontSize: "18px", lineHeight: 1, padding: "0 4px" },
-  searchBtn: { height: "60px", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 24px", border: "none", background: "#7A1631", color: "#F3ECE1", fontWeight: 500, fontSize: "18px", letterSpacing: "-0.01em", cursor: "pointer", textAlign: "left" },
+  searchBtn: { height: "60px", display: "flex", alignItems: "center", justifyContent: "center", padding: "0 24px", border: "none", background: "#7A1631", color: "#F3ECE1", fontWeight: 500, fontSize: "18px", letterSpacing: "-0.01em", cursor: "pointer", textAlign: "center" },
   // While it runs: the button fills with rose as the search goes
-  stopBtn: { position: "relative", overflow: "hidden", height: "60px", padding: "0 24px", border: "2px solid #7A1631", background: "transparent", color: "#2E0A14", fontWeight: 500, fontSize: "18px", cursor: "pointer", textAlign: "left" },
+  stopBtn: { position: "relative", overflow: "hidden", height: "60px", padding: "0 24px", border: "2px solid #7A1631", background: "transparent", color: "#2E0A14", fontWeight: 500, fontSize: "18px", cursor: "pointer", textAlign: "center" },
   progressFill: { position: "absolute", inset: "0 auto 0 0", background: "#E8C9C3", transition: "width 0.3s ease-out" },
   progressLabel: { position: "relative" },
   error: { color: "#7A1631", fontSize: "15px" },

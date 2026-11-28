@@ -82,6 +82,8 @@ const pathStyles: Record<string, React.CSSProperties> = {
 /** The side panel (desktop) / bottom sheet (phones): Explore's InfoPanel look. */
 export const panelStyles: Record<string, React.CSSProperties> = {
   panel: { width: "320px", maxWidth: "100%", padding: "16px 24px 20px", background: "#F3ECE1", borderTop: "2px solid #2E0A14", overflowY: "auto", display: "flex", flexDirection: "column", gap: "1rem", flexShrink: 0 },
+  // In a row on wide screens (Proximity, Upcoming): the panel's content beneath the row, no box of its own
+  inline: { display: "flex", flexDirection: "column", gap: "1rem", padding: "4px 0 18px" },
   header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "-0.5rem" },
   badge: { padding: "3px 8px", fontSize: "13px", fontWeight: 500, color: "#F3ECE1" },
   close: { background: "none", border: "none", color: "#2E0A14", fontSize: "1.75rem", cursor: "pointer", lineHeight: 1 },
