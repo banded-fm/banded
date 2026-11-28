@@ -315,6 +315,7 @@ src/
 │   ├── InfoPanel.tsx     — Side panel (desktop) / bottom sheet (mobile) for node details: group/person,
 │   │                       name, MusicBrainz disambiguation, genres (graphDb.getArtistDetails, filled in
 │   │                       once the graph has loaded) and a link to the artist's MusicBrainz page.
+│   ├── RouteError.tsx    — The router's errorElement: "Something went wrong" with Reload and Go home, inside the nav and footer.
 │   └── DebugConsole.tsx  — Collapsible log console, shown when the URL has ?debug=1 or ?debug=true.
 ├── api/
 │   ├── supabase.ts       — Client for Supabase edge functions (Pollstar via our server, graph lookups, misses).
@@ -335,6 +336,8 @@ src/
 │   ├── searchResolution.test.ts  — MBID-vs-name search resolution.
 │   ├── artistSuggest.test.ts     — Dropdown suggestion merging and labels.
 │   └── fixtures/         — Captured MusicBrainz API responses (search-fuzz, artist-arctic-monkeys, etc.).
+├── staleVersion.ts      — After a deploy an open tab's lazily loaded files are gone: reloadForNewVersion (once per 10 s),
+│                           isStaleFileError. Used by main.tsx (vite:preloadError) and the Map route's lazy import.
 ├── App.tsx               — Router (createHashRouter, 7 routes: Home at /, Graph at /graph, Map at /map, Proximity at /proximity, Upcoming at /upcoming, Play, About; unknown paths go home).
 ├── main.tsx              — Entry point.
 ├── vite-env.d.ts         — Vite type declarations.
